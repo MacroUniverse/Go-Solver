@@ -112,25 +112,25 @@ public:
 inline void Board::disp()
 {
 	Int i, j;
-	cout << "  ";
-	for (i = 1; i <= m_Nx; ++i) cout << i << ' '; cout << "\n";
-	cout << "  ";
-	for (i = 1; i <= m_Nx; ++i) cout << "--"; cout << "\n";
+	cout << "     ";
+	for (i = 0; i < m_Nx; ++i) cout << i << "   "; cout << "\n";
+	cout << "    ";
+	for (i = 0; i < m_Nx; ++i) cout << "----"; cout << "\n";
 	for (j = 0; j < m_Ny; ++j) {
-		cout << j + 1 << '|';
+		cout << " " << j << " |";
 		for (i = 0; i < m_Nx; ++i) {
 			if (m_data[i][j] == NONE)
-				cout << " |";
+				cout << "   |";
 			else if (m_data[i][j] == BLACK)
-				cout << "@|";
+				cout << " @ |";
 			else if (m_data[i][j] == WHITE)
-				cout << "O|";
+				cout << " O |";
 			else
 				error("Board::disp(): illegal stone code!");
 		}
 		cout << "\n";
-		cout << "  ";
-		for (i = 1; i <= m_Nx; ++i) cout << "--"; cout << "\n";
+		cout << "    ";
+		for (i = 1; i <= m_Nx; ++i) cout << "----"; cout << "\n";
 	}
 }
 
@@ -304,7 +304,25 @@ inline Int Tree::step()
 
 inline void Tree::disp()
 {
-	cout << "step: " << step() << "\n\n";
+	Char x, y;
+	cout << "step: " << step() << " ";
+	if (m_ind < 0)
+		cout << "(empty)";
+	else {
+		if (turn() == BLACK)
+			cout << "(black ";
+		else if (turn() == WHITE)
+			cout << "(white ";
+		else
+			error("Tree:disp(): illegal side name!");
+
+		if (coord(x, y, m_ind))
+			cout << "pass)";
+		else
+			cout << "[" << Int(x) << "," << Int(y) << "] )";
+	}
+	
+	cout << "\n\n";
 	board.disp();
 	cout << '\n' << endl;
 };
