@@ -1,3 +1,4 @@
+#include <iostream>
 #include <vector>
 #include <string>
 #include <fstream>
@@ -5,7 +6,7 @@
 
 using namespace slisc;
 using std::vector; using std::string;
-using std::ofstream;
+using std::ofstream; using std::cout; using std::endl;
 
 enum Who { NONE, BLACK, WHITE, UNKNOWN, DRAW }; // TODO: make this a char type
 
@@ -92,6 +93,32 @@ public:
 
 	Board(Char_I Nx, Char_I Ny) : m_Nx(Nx), m_Ny(Ny), m_data(Nx, Ny), m_mark(Nx, Ny)
 	{ m_data = NONE; m_mark = 0; }
+
+	// display board on screen
+	void disp()
+	{
+		Int i, j;
+		cout << "  ";
+		for (i = 1; i <= m_Nx; ++i) cout << i << ' '; cout << "\n";
+		cout << "  ";
+		for (i = 1; i <= m_Nx; ++i) cout << "--"; cout << "\n";
+		for (j = 0; j < m_Ny; ++j) {
+			cout << j+1 << '|';
+			for (i = 0; i < m_Nx; ++i) {
+				if (m_data[i][j] == NONE)
+					cout << " |";
+				else if (m_data[i][j] == BLACK)
+					cout << "@|";
+				else if (m_data[i][j] == WHITE)
+					cout << "O|";
+				else
+					error("Board::disp(): illegal stone code!");
+			}
+			cout << "\n";
+			cout << "  ";
+			for (i = 1; i <= m_Nx; ++i) cout << "--"; cout << "\n";
+		}
+	}
 
 	void place(Char_I x, Char_I y, Who_I s)
 	{
@@ -250,6 +277,14 @@ public:
 
 	Bool coord(Char_O &x, Char_O &y, Int_I ind) { return m_data[ind].coord(x, y); }
 
+	// display board
+	void disp()
+	{
+		cout << "step: " << step() << "\n\n";
+		board.disp();
+		cout << '\n' << endl;
+	}; 
+
 	void pass()
 	{
 		Node node;
@@ -326,15 +361,25 @@ public:
 
 int main()
 {
-	Tree tree(3,3);
-	tree.place(1, 1);
-	tree.place(1, 0);
-	tree.place(1, 2);
-	tree.place(0, 1);
-	tree.place(2, 1);
-	tree.place(0, 0);
-	tree.place(0, 2);
-	tree.pass();
-	tree.place(2, 0);
+	Tree tree(3,3); tree.disp();
+	
+	tree.place(1, 1); tree.disp();
+	
+	tree.place(1, 0); tree.disp();
+	
+	tree.place(1, 2); tree.disp();
+	
+	tree.place(0, 1); tree.disp();
+	
+	tree.place(2, 1); tree.disp();
+	
+	tree.place(0, 0); tree.disp();
+	
+	tree.place(0, 2); tree.disp();
+	
+	tree.pass(); tree.disp();
+	
+	tree.place(2, 0); tree.disp();
+	
 	tree.writeSGF("test.sgf");
 }
