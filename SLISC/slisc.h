@@ -300,6 +300,8 @@ public:
 #endif
 	inline void operator<<(Matrix &rhs); // move data and rhs.resize(0, 0)
 	inline T* operator[](Long_I i);	//subscripting: pointer to row i
+	inline T& operator()(Long_I i, Long_I j);	// double indexing
+	inline const T& operator()(Long_I i, Long_I j) const;
 	inline const T* operator[](Long_I i) const;
 	inline Long nrows() const;
 	inline Long ncols() const;
@@ -374,6 +376,26 @@ inline T* Matrix<T>::operator[](Long_I i)
 		error("Matrix subscript out of bounds");
 #endif
 	return m_v[i];
+}
+
+template <class T>
+inline T& Matrix<T>::operator()(Long_I i, Long_I j)
+{
+#ifdef _CHECKBOUNDS_
+	if (i < 0 || i >= m_Nr || j < 0 || j >= m_Nc)
+		error("Matrix subscript out of bounds");
+#endif
+	return m_p[m_Nc*i+j];
+}
+
+template <class T>
+inline const T& Matrix<T>::operator()(Long_I i, Long_I j) const
+{
+#ifdef _CHECKBOUNDS_
+	if (i < 0 || i >= m_Nr || j < 0 || j >= m_Nc)
+		error("Matrix subscript out of bounds");
+#endif
+	return m_p[m_Nc*i+j];
 }
 
 template <class T>
