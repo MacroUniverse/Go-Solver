@@ -1,7 +1,11 @@
 #include <vector>
+#include <string>
+#include <fstream>
 #include "SLISC/slisc.h"
+
 using namespace slisc;
-using std::vector;
+using std::vector; using std::string;
+using std::ofstream;
 
 enum Who { NONE, BLACK, WHITE, UNKNOWN, DRAW }; // TODO: make this a char type
 
@@ -33,6 +37,17 @@ public:
 	}
 
 	void pass() { m_x = 0; m_y = -1; }
+
+	Bool ispass()
+	{
+		if (m_x == 0 && m_y == -1)
+			return true;
+		else if (m_x < 0 || m_y < 0)
+			error("Move::ispass(x, y): illegal coordinates!");
+		else
+			return false;
+	}
+
 	~Move() {}
 };
 
@@ -41,25 +56,25 @@ class Node
 {
 public:
 	Move m_mov;
-	Node* m_last; // nullptr: first node
-	vector<Node*> m_next; // nullptr: end node
+	Int m_last; // -1: first node
+	vector<Int> m_next; // -1: end node
 	Who m_turn; // who's turn is this?
 	Who m_win; // if two gods playing, who will win?
-	int m_step; // current step number
+	Int m_step; // current step number
 
 	Node() {}
 	
-	void set_last(Node *last) { m_last = last; }
+	void set_last(Int_I ind) { m_last = ind; }
 
-	void set_next(Node *next) { m_next.push_back(next); }
+	void set_next(Int_I ind) { m_next.push_back(ind); }
 
+	Bool coord(Char_O &x, Char_O &y) { x = m_mov.m_x; y = m_mov.m_y; return m_mov.ispass(); }
 
-	void place(int step, Char_I x, Char_I y, Who_I turn, Node* last)
-	{
-		m_step = step; m_mov.m_x = x; m_mov.m_y = y; m_turn = turn; m_last = last;
-	}
+	void place(Int step, Char_I x, Char_I y, Who_I turn, Int_I last)
+	{ m_step = step; m_mov.m_x = x; m_mov.m_y = y; m_turn = turn; m_last = last; }
 
-	void pass(int step, Node *last) { m_step = step; m_last = last; }
+	void pass(Int step, Who_I turn, Int_I last)
+	{ m_step = step; m_mov.m_x = 0; m_mov.m_y = -1; m_turn = turn;  m_last = last;	}
 
 	~Node() {}
 };
@@ -68,14 +83,15 @@ public:
 // status of the board
 class Board
 {
-private:
+public:
 	char m_Nx, m_Ny;
 	Matrix<Who> m_data;
 	MatChar m_mark; // 0: unmarked, 1: marked, else: not used yet
 	vector<Move> group; // a group of connected stones
 	Int qi; // qi of group
-public:
-	Board(Char_I Nx, Char_I Ny) : m_Nx(Nx), m_Ny(Ny), m_data(Nx, Ny) { m_data = NONE; m_mark = 0; }
+
+	Board(Char_I Nx, Char_I Ny) : m_Nx(Nx), m_Ny(Ny), m_data(Nx, Ny), m_mark(Nx, Ny)
+	{ m_data = NONE; m_mark = 0; }
 
 	void place(Char_I x, Char_I y, Who_I s)
 	{
@@ -153,28 +169,49 @@ public:
 	// and calculate qi
 	void connect(Char_I x, Char_I y)
 	{
+		Who s, s0 = m_data[x][y];
 		group.push_back(Move(x, y));
 		m_mark[x][y] = 1;
 		
-		if (x > 0)
-			if (m_data[x - 1][y] != NONE)
+		if (x > 0) {
+			s = m_data[x - 1][y];
+			Char & mark = m_mark[x - 1][y];
+			if (s == s0 && !mark)
 				connect(x - 1, y);
-			else ++qi;
-		
-		if (x < m_Nx - 1)
-			if (m_data[x + 1][y] != NONE)
+			else if (s == NONE && !mark) {
+				++qi; mark = 1;
+			}
+		}
+
+		if (x < m_Nx - 1) {
+			s = m_data[x + 1][y];
+			Char & mark = m_mark[x + 1][y];
+			if (s == s0 && !mark)
 				connect(x + 1, y);
-			else ++qi;
-
-		if (y > 0)
-			if (m_data[x][y - 1] != NONE)
+			else if (s == NONE && !mark) {
+				++qi; mark = 1;
+			}
+		}
+			
+		if (y > 0) {
+			s = m_data[x][y - 1];
+			Char & mark = m_mark[x][y - 1];
+			if (s == s0 && !mark)
 				connect(x, y - 1);
-			else ++qi;
+			else if (s == NONE && !mark) {
+				++qi; mark = 1;
+			}
+		}
 
-		if (y < m_Ny - 1)
-			if (m_data[x][y + 1] != NONE)
+		if (y < m_Ny - 1) {
+			s = m_data[x][y + 1];
+			Char & mark = m_mark[x][y + 1];
+			if (s == s0 && !mark)
 				connect(x, y + 1);
-			else ++qi;
+			else if (s == NONE && !mark) {
+				++qi; mark = 1;
+			}
+		}
 	}
 
 	// remove group if it is dead after placing (x,y)
@@ -190,52 +227,100 @@ public:
 class Tree
 {
 public:
-	size_t ind; // index of the current step (already played) in m_data
+	Int m_ind; // index of the current step (already played) in m_data (init: -1)
 	vector<Node> m_data;
 	Board board;
 
-	Tree(Char_I Nx, Char_I Ny): ind(-1), board(Nx, Ny) {} // specify board size
+	Tree(Char_I Nx, Char_I Ny): m_ind(-1), board(Nx, Ny) {} // specify board size
 
-	Node * ptr() { return &m_data[ind]; } // pointer to current node
-
-	size_t step() { return m_data[ind].m_step; } // current step number 
-
-	Who turn() { return m_data[ind].m_turn; } // who played the current step
-
-	Who turn1()
-	{
-		if (m_data[ind].m_turn == BLACK) return WHITE;
-		if (m_data[ind].m_turn == WHITE) return BLACK;
-		error("Tree::turn1(): ???!");
+	// index to node of last step
+	Int last() {
+		if (m_ind == -1) return -1;
+		return m_data[m_ind].m_last;
 	}
+
+	// current step number
+	Int step()
+	{
+		if (m_ind == -1) return -1;
+		return m_data[m_ind].m_step;
+	}
+
+	Who turn() { return m_data[m_ind].m_turn; } // who played the current step
+
+	Bool coord(Char_O &x, Char_O &y, Int_I ind) { return m_data[ind].coord(x, y); }
 
 	void pass()
 	{
 		Node node;
-		node.pass(m_data[ind].m_step + 1, ptr());
+		node.pass(step() + 1, inv(turn()), m_ind);
 		m_data.push_back(node);
-		++ind;
+		++m_ind;
 	}
 
 	void place(Char_I x, Char_I y)
 	{
-		if (ind == -1) { // first move
+		if (m_ind == -1) { // first move
+			board.place(x, y, BLACK);
 			Node node;
-			node.place(0, x, y, BLACK, nullptr);
+			node.place(0, x, y, BLACK, -1);
 			m_data.push_back(node);
-			++ind;
+			++m_ind;
+			return;
 		}
 
 		// update board
-		board.place(x, y, turn1());
+		board.place(x, y, inv(turn()));
 		// add Node to tree
 		Node node;
-		node.place(step(), x, y, turn1(), ptr());
+		node.place(step() + 1, x, y, inv(turn()), m_ind);
 		m_data.push_back(node);
-		m_data[ind].set_next(&m_data.back());
-		++ind;
+		m_data[m_ind].set_next(m_ind + 1);
+		++m_ind;
 	}
 	
+	// get index vector of the current branch
+	void branch(vector<Int> &br)
+	{
+		if (step() < 0) { br.resize(0);  return; }
+		Int i;
+		br.resize(step() + 1); // node index
+		br[step()] = m_ind;
+		for (i = step(); i > 0; --i)
+			br[i - 1] = m_data[br[i]].m_last;
+	}
+
+	void writeSGF(const string &name)
+	{
+		ofstream fout(name);
+		fout << "(\n";
+		fout << "  ;GM[1]FF[4]CA[UTF-8]AP[]KM[0]";
+
+		// board size
+		if (board.m_Nx == board.m_Ny)
+			fout << "SZ[" << Int(board.m_Nx) << "]";
+		else
+			fout << "SZ[" << board.m_Nx << ":" << board.m_Ny << "]";
+		fout << "DT[]\n";
+
+		// write current branch
+		Char BW = 'B'; // letter B or letter W
+		Int i; Char x, y;
+		vector<Int> br;
+		branch(br);
+		for (i = 0; i < br.size(); ++i) {
+			// black moves
+			fout << "  ;" << BW;
+			if (coord(x, y, br[i])) // pass
+				fout << "[]\n";
+			else
+				fout << '[' << char('a' + x) << char('a' + y) << "]\n";
+			BW = BW == 'B'? 'W' : 'B';
+		}
+		fout << ")\n";
+		fout.close();
+	}
+
 	~Tree() {}
 };
 
@@ -246,4 +331,10 @@ int main()
 	tree.place(1, 0);
 	tree.place(1, 2);
 	tree.place(0, 1);
+	tree.place(2, 1);
+	tree.place(0, 0);
+	tree.place(0, 2);
+	tree.pass();
+	tree.place(2, 0);
+	tree.writeSGF("test.sgf");
 }
