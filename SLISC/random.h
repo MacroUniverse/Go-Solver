@@ -48,7 +48,7 @@ namespace slisc
 	// generate a random permutation of {0,1,2,...,N-1}
 	inline void randPerm(VecInt_O perm, Int_I N)
 	{
-		Int i, j, n = N, ind;
+		Int j, n = N, ind;
 		VecInt pool;
 		linspace(pool, 0, N - 1, N);
 		perm.resize(N);

@@ -301,7 +301,7 @@ public:
 #endif
 	inline void operator<<(Matrix &rhs); // move data and rhs.resize(0, 0)
 	inline T* operator[](Long_I i);	//subscripting: pointer to row i
-	inline T& operator()(Long_I i, Long_I j);	// double indexing
+	inline T& operator()(Long_I i, Long_I j); // double indexing
 	inline const T& operator()(Long_I i, Long_I j) const;
 	inline const T* operator[](Long_I i) const;
 	inline Long nrows() const;
