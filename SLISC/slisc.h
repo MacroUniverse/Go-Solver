@@ -287,6 +287,7 @@ private:
 	T **m_v;
 	inline T ** v_alloc();
 public:
+	using Base::operator();
 	Matrix();
 	Matrix(Long_I Nr, Long_I Nc);
 	Matrix(Long_I Nr, Long_I Nc, const T &s);	//Initialize to constant

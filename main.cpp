@@ -63,7 +63,8 @@ public:
 	vector<Long> m_next; // -1: end node
 	Who m_turn; // who's turn is this?
 	Who m_win; // if two gods playing, who will win?
-	Int m_step; // current step number
+	Long m_pool_ind; // pool index, board stored in Pool::m_board[m_pool_ind]
+	// Int m_step; // no step number due to upward branching
 
 	Node() {}
 	
@@ -73,21 +74,46 @@ public:
 
 	Bool coord(Char_O &x, Char_O &y) { x = m_mov.m_x; y = m_mov.m_y; return m_mov.ispass(); }
 
-	void place(Int_I step, Char_I x, Char_I y, Who_I turn, Long_I last)
-	{ m_step = step; m_mov.m_x = x; m_mov.m_y = y; m_turn = turn; m_last.push_back(last); }
+	void place(Char_I x, Char_I y, Who_I turn, Long_I last)
+	{ m_mov.m_x = x; m_mov.m_y = y; m_turn = turn; m_last.push_back(last); }
 
-	void pass(Int_I step, Who_I turn, Long_I last)
-	{ m_step = step; m_mov.m_x = 0; m_mov.m_y = -1; m_turn = turn;  m_last.push_back(last);	}
+	void pass(Who_I turn, Long_I last)
+	{ m_mov.m_x = 0; m_mov.m_y = -1; m_turn = turn;  m_last.push_back(last);	}
 
 	~Node() {}
 };
 
+// board size Nx, may only set once
+inline Char board_Nx(Char_I Nx = -1)
+{
+	static Char Nx0 = -1;
+	if (Nx0 < 0) {
+		if (Nx > 0)
+			Nx0 = Nx;
+		else
+			error("board_Nx(): size must be positive!");
+	}
+	return Nx0;
+}
+
+// board size Ny, may only set once
+inline Char board_Ny(Char_I Ny = -1)
+{
+	static Char Ny0 = -1;
+	if (Ny0 < 0) {
+		if (Ny > 0)
+			Ny0 = Ny;
+		else
+			error("board_Ny(): size must be positive!");
+	}
+	return Ny0;
+}
 
 // status of the board
+// TODO: implement operator << for move
 class Board
 {
 public:
-	char m_Nx, m_Ny;
 	Matrix<Who> m_data;
 
 	// TODO: can these be non member ?
@@ -95,8 +121,15 @@ public:
 	vector<Move> group; // a group of connected stones
 	Int qi; // qi of group
 
-	Board(Char_I Nx, Char_I Ny) : m_Nx(Nx), m_Ny(Ny), m_data(Nx, Ny), m_mark(Nx, Ny)
+	Board() {}
+
+	Board(Char_I Nx, Char_I Ny) : m_data(Nx, Ny), m_mark(Nx, Ny)
 	{ m_data = NONE; m_mark = 0; }
+
+	inline Bool operator==(const Board &rhs)
+	{ return this->m_data == rhs.m_data; }
+
+	inline Bool operator<(const Board &rhs); // comparation for sorting
 
 	inline void disp(); // display board on screen
 
@@ -115,16 +148,28 @@ public:
 	~Board() {}
 };
 
+// imagine Board::m_data as a long integer, try two compare two integers
+inline Bool Board::operator<(const Board &rhs)
+{
+	Int i, N = board_Nx() * board_Ny();
+	for (i = 0; i < N; ++i) {
+		if (this->m_data(i) == rhs.m_data(i)) continue;
+		if (this->m_data(i) < rhs.m_data(i)) return true;
+		return false;
+	}
+	return false;
+}
+
 inline void Board::disp()
 {
-	Char i, x, y;
+	Char i, x, y, Nx = board_Nx(), Ny = board_Ny();
 	cout << "     ";
-	for (i = 0; i < m_Nx; ++i) cout << Int(i) << "   "; cout << "\n";
+	for (i = 0; i < board_Nx(); ++i) cout << Int(i) << "   "; cout << "\n";
 	cout << "    ";
-	for (x = 0; x < m_Nx; ++x) cout << "----"; cout << "\n";
-	for (y = 0; y < m_Ny; ++y) {
+	for (x = 0; x < Nx; ++x) cout << "----"; cout << "\n";
+	for (y = 0; y < Ny; ++y) {
 		cout << " " << Int(y) << " |";
-		for (x = 0; x < m_Nx; ++x) {
+		for (x = 0; x < Nx; ++x) {
 			if (m_data(x,y) == NONE)
 				cout << "   |";
 			else if (m_data(x,y) == BLACK)
@@ -136,7 +181,7 @@ inline void Board::disp()
 		}
 		cout << "\n";
 		cout << "    ";
-		for (i = 1; i <= m_Nx; ++i) cout << "----"; cout << "\n";
+		for (i = 1; i <= Nx; ++i) cout << "----"; cout << "\n";
 	}
 }
 
@@ -146,6 +191,7 @@ inline void Board::disp()
 // return -2 if no qi, do nothing
 inline Int Board::place(Char_I x, Char_I y, Who_I s)
 {
+	Int Nx = board_Nx(), Ny = board_Ny();
 	// check if already occupied
 	if (m_data(x,y) != NONE)
 		return -1;
@@ -163,7 +209,7 @@ inline Int Board::place(Char_I x, Char_I y, Who_I s)
 		if (qi == 0) remove_group();
 	}
 
-	if (x < m_Nx - 1 && m_data(x + 1, y) == inv(s)) {
+	if (x < Nx - 1 && m_data(x + 1, y) == inv(s)) {
 		connect_init();
 		connect(x + 1, y);
 		if (qi == 0) remove_group();
@@ -175,7 +221,7 @@ inline Int Board::place(Char_I x, Char_I y, Who_I s)
 		if (qi == 0) remove_group();
 	}
 
-	if (y < m_Ny && m_data(x, y + 1) == inv(s)) {
+	if (y < Ny && m_data(x, y + 1) == inv(s)) {
 		connect_init();
 		connect(x, y + 1);
 		if (qi == 0) remove_group();
@@ -189,7 +235,7 @@ inline Int Board::place(Char_I x, Char_I y, Who_I s)
 		if (qi == 0) return -2;
 	}
 
-	if (x < m_Nx - 1 && m_data(x + 1, y) == s) {
+	if (x < Nx - 1 && m_data(x + 1, y) == s) {
 		connect_init();
 		connect(x + 1, y);
 		if (qi == 0) return -2;
@@ -201,7 +247,7 @@ inline Int Board::place(Char_I x, Char_I y, Who_I s)
 		if (qi == 0) return -2;
 	}
 
-	if (y < m_Ny && m_data(x, y + 1) == s) {
+	if (y < Ny && m_data(x, y + 1) == s) {
 		connect_init();
 		connect(x, y + 1);
 		if (qi == 0) return -2;
@@ -217,6 +263,7 @@ inline void Board::connect_init()
 
 inline void Board::connect(Char_I x, Char_I y)
 {
+	Char Nx = board_Nx(), Ny = board_Ny();
 	Who s, s0 = m_data(x, y);
 	group.push_back(Move(x, y));
 	m_mark(x, y) = 1;
@@ -231,7 +278,7 @@ inline void Board::connect(Char_I x, Char_I y)
 		}
 	}
 
-	if (x < m_Nx - 1) {
+	if (x < Nx - 1) {
 		s = m_data(x + 1, y);
 		Char & mark = m_mark(x + 1, y);
 		if (s == s0 && !mark)
@@ -251,7 +298,7 @@ inline void Board::connect(Char_I x, Char_I y)
 		}
 	}
 
-	if (y < m_Ny - 1) {
+	if (y < Ny - 1) {
 		s = m_data(x, y + 1);
 		Char & mark = m_mark(x, y + 1);
 		if (s == s0 && !mark)
@@ -273,23 +320,23 @@ inline void Board::remove_group()
 // back score = # of black on board + single "qi" surrounded by black + (other empty space)/2
 inline Int Board::score_x2()
 {
-	Char x, y;
+	Char x, y, Nx = board_Nx(), Ny = board_Ny();
 	Int black = 0, qi = 0, common_qi = 0;
 	Who s;
-	for (x = 0; x < m_Nx; ++x)
-		for (y = 0; y < m_Ny; ++y) {
+	for (x = 0; x < Nx; ++x)
+		for (y = 0; y < Ny; ++y) {
 			s = m_data(x, y);
 			if (s == NONE) {
 				// qi not surrounded by black
 				if ((x > 0 && m_data(x - 1, y) != BLACK)
-					|| (x < m_Nx - 1 && m_data(x + 1, y) != BLACK)
+					|| (x < Nx - 1 && m_data(x + 1, y) != BLACK)
 					|| (y > 0 && m_data(x, y - 1) != BLACK)
-					|| (y < m_Ny - 1 && m_data(x, y + 1) != BLACK)) {
+					|| (y < Ny - 1 && m_data(x, y + 1) != BLACK)) {
 					// qi not surrounded by white
 					if ((x > 0 && m_data(x - 1, y) != WHITE)
-						|| (x < m_Nx - 1 && m_data(x + 1, y) != WHITE)
+						|| (x < Nx - 1 && m_data(x + 1, y) != WHITE)
 						|| (y > 0 && m_data(x, y - 1) != WHITE)
-						|| (y < m_Ny - 1 && m_data(x, y + 1) != WHITE))
+						|| (y < Ny - 1 && m_data(x, y + 1) != WHITE))
 						++common_qi;
 				}
 				else // qi surrounded by black
@@ -305,15 +352,18 @@ inline Int Board::score_x2()
 
 // all situations in the tree, sorted for quick search
 // sorting: each board is a radix 3 number, sort these numbers with ascending order
+// index to Pool::m_data is called pool index, index to Tree::m_data is called tree index, these indices should never change
 class Pool
 {
 public:
-	vector<Board> m_data; // should be the same order as in the Tree
+	vector<Board> m_boards; // should be the same order as in the Tree, for "pass", store an empty board
 	vector<Long> m_treeInd;  // m_treeInd[i] is the index of m_data[i] in the game tree
 	vector<Long> m_order; // m_data[m_order[i]] is in sorted order
 
+	Pool() {}
+
 	// get a board by index
-	inline Board & get(Long_I ind) { return m_data[m_order[ind]]; }
+	inline Board & get(Long_I ind) { return m_boards[m_order[ind]]; }
 
 	// push board to m_data and insert ind to m_inds
 	inline void push(const Board &board, Long_I ind);
@@ -321,6 +371,8 @@ public:
 	// search Pool: get[search(board)] will match board
 	inline Long search(const Board &board);
 
+	// place a stone
+	inline Int place(Long_I ind, Char_I x, Char_I y);
 };
 
 inline void Pool::push(const Board &board, Long_I ind)
@@ -331,6 +383,26 @@ inline void Pool::push(const Board &board, Long_I ind)
 // return -1 if does not exist
 inline Long Pool::search(const Board &board)
 {
+	Int i, N = board_Nx() * board_Ny();
+	for (i = 0; i < N; ++i) {
+
+	}
+}
+
+inline Int place(Long_I tree_ind, Char_I x, Char_I y)
+{
+	// return 0 if legal, and update board
+	// Ko is not considered!
+	// return -1 if occupied, do nothing
+	// return -2 if no qi, do nothing
+	// inline Int Board::place(Char_I x, Char_I y, Who_I s)
+}
+
+// return 0 if a new board is added
+// return index to the same board if "Ko" happens
+// return -1 if move is illegal
+inline Int place(Long_I ind, Char_I x, Char_I y)
+{
 
 }
 
@@ -340,26 +412,32 @@ class Tree
 {
 public:
 	Long m_ind; // index of the current step (already played) in m_data (init: -1)
-	vector<Node> m_data;
-	Board m_board;
+	vector<Node> m_nodes;
+	Pool m_pool;
 
-	Tree(Char_I Nx, Char_I Ny): m_ind(-1), m_board(Nx, Ny) {} // specify board size
+	Tree(): m_ind(-1) {} // specify board size
+
+	Board & board(Long_I ind) { return m_pool.m_boards[ind]; } // reference to the Board obj of a node
 
 	inline Long last(); // index to node of last step (-1 if doesn't exist)
 
-	inline Int step(); // current step number
+	// inline Int step(); // step is ambiguous due to upward branching
 
-	inline Who turn() { return m_data[m_ind].m_turn; } // who played the current step
+	inline Who turn() { return m_nodes[m_ind].m_turn; } // who played the current step
 
-	inline Bool coord(Char_O &x, Char_O &y, Long_I ind) { return m_data[ind].coord(x, y); }
+	inline Bool coord(Char_O &x, Char_O &y, Long_I ind) { return m_nodes[ind].coord(x, y); }
 
-	inline void disp(); // display board
+	inline void disp_board(Long_I ind = -1); // display board
 
 	inline Int pass();
 
 	inline Int place(Char_I x, Char_I y);
+
+	inline Int islinked(Long_I ind1, Long_I ind2); // check if node ind1 can lead to node ind2
+
+	inline Int check_ko(); // check if same board already exists in the Pool and decide if it is a Ko
 	
-	inline void branch(vector<Long> &br); // get index vector of the current branch
+	inline void branch(vector<Long> &br, Long_I ind); // get index vector of the a branch ending at a node
 
 	inline void writeSGF(const string &name);
 
@@ -367,7 +445,7 @@ public:
 
 	inline void winner(Long_I node); // analyse who has winning strategy for a node
 
-	inline Int score_x2() { return m_board.score_x2(); }
+	inline Int score_x2(Long_I ind) { return board(ind).score_x2(); }
 
 	~Tree() {}
 };
@@ -376,20 +454,15 @@ public:
 inline Long Tree::last()
 {
 	if (m_ind == -1) return -1;
-	return m_data[m_ind].m_last[0];
+	return m_nodes[m_ind].m_last[0];
 }
 
-inline Int Tree::step()
-{
-	if (m_ind == -1) return -1;
-	return m_data[m_ind].m_step;
-}
-
-inline void Tree::disp()
+// ind = m_ind my default
+inline void Tree::disp_board(Long_I ind)
 {
 	Char x, y;
-	cout << "step: " << step() << " ";
-	if (m_ind < 0)
+	Long ind1 = ind < 0 ? m_ind : ind;
+	if (ind1 < 0)
 		cout << "(empty)";
 	else {
 		if (turn() == BLACK)
@@ -399,14 +472,14 @@ inline void Tree::disp()
 		else
 			error("Tree:disp(): illegal side name!");
 
-		if (coord(x, y, m_ind))
+		if (coord(x, y, ind1))
 			cout << "pass)";
 		else
 			cout << "[" << Int(x) << "," << Int(y) << "] )";
 	}
 	
 	cout << "\n\n";
-	m_board.disp();
+	board(ind).disp();
 	cout << '\n' << endl;
 };
 
@@ -414,12 +487,12 @@ inline void Tree::disp()
 inline Int Tree::pass()
 {
 	Node node;
-	node.pass(step() + 1, inv(turn()), m_ind);
-	m_data.push_back(node);
+	node.pass(inv(turn()), m_ind);
+	m_nodes.push_back(node);
 	++m_ind;
 	// check double pass (game ends)
-	if (m_data[m_ind - 1].m_mov.ispass()) {
-		m_data[m_ind].m_next.push_back(-1);
+	if (m_nodes[m_ind - 1].m_mov.ispass()) {
+		m_nodes[m_ind].m_next.push_back(-1);
 		return -1;
 	}
 	return 0;
@@ -431,8 +504,8 @@ inline Int Tree::place(Char_I x, Char_I y)
 	if (m_ind == -1) { // first move
 		m_board.place(x, y, BLACK);
 		Node node;
-		node.place(0, x, y, BLACK, -1);
-		m_data.push_back(node);
+		node.place(x, y, BLACK, -1);
+		m_nodes.push_back(node);
 		++m_ind;
 		return;
 	}
@@ -447,41 +520,67 @@ inline Int Tree::place(Char_I x, Char_I y)
 
 	// add Node to tree
 	Node node;
-	node.place(step() + 1, x, y, inv(turn()), m_ind);
-	m_data.push_back(node);
-	m_data[m_ind].set_next(m_ind + 1);
+	node.place(x, y, inv(turn()), m_ind);
+	m_nodes.push_back(node);
+	m_nodes[m_ind].set_next(m_ind + 1);
 	++m_ind;
 }
 
-// if multiple paths exists choose the first one for now
-inline void Tree::branch(vector<Long> &br)
+// return 0 if not linked
+// return 1 if node ind1 can lead to node ind2
+// upward search from node ind2 is most efficient
+// this is a recursive function to deal with upward branching
+inline Int Tree::islinked(Long_I ind1, Long_I ind2)
 {
-	if (step() < 0) { br.resize(0);  return; }
-	Int i;
-	br.resize(step() + 1); // node index
-	br[step()] = m_ind;
-	for (i = step(); i > 0; --i)
-		br[i - 1] = m_data[br[i]].m_last[0];
+	Long i, ind = ind2;
+	for (i = 0; i < 10000; ++i) {
+		if (m_nodes[ind].m_last.size() > 1) break; // multiple upward branch
+		if (ind == ind2) return 1; // found ind2
+		if (m_nodes[ind].m_last[0] == -1) return 0; // reached top of tree
+		ind = m_nodes[ind].m_last[0]; // single line, go up
+	}
+	for (i = 0; i < m_nodes[ind].m_last.size(); ++i) {
+		if (islinked(ind1, m_nodes[ind].m_last[i]) == 1)
+			return 1;
+	}
+}
+
+// if multiple paths exists choose the first one for now
+inline void Tree::branch(vector<Long> &br, Long_I ind)
+{
+	Int i, Nbr;
+	Long ind1 = m_ind;
+	br.resize(0);
+	for (i = 0; i < 10000; ++i) {
+		br.push_back(ind1);
+		ind1 = m_nodes[ind1].m_last[0];
+		if (ind1 == -1) break;
+	}
+	Nbr = br.size();
+	for (i = Nbr / 2; i > -1; --i) {
+		SWAP(br[Nbr - i - 1], br[i]);
+	}
 }
 
 inline void Tree::writeSGF(const string &name)
 {
+	Char Nx = board_Nx(), Ny = board_Ny();
 	ofstream fout(name);
 	fout << "(\n";
 	fout << "  ;GM[1]FF[4]CA[UTF-8]AP[]KM[0]";
 
 	// board size
-	if (m_board.m_Nx == m_board.m_Ny)
-		fout << "SZ[" << Int(m_board.m_Nx) << "]";
+	if (Nx == Ny)
+		fout << "SZ[" << Int(Nx) << "]";
 	else
-		fout << "SZ[" << m_board.m_Nx << ":" << m_board.m_Ny << "]";
+		fout << "SZ[" << Nx << ":" << Ny << "]";
 	fout << "DT[]\n";
 
 	// write current branch
 	Char BW = 'B'; // letter B or letter W
 	Int i; Char x, y;
 	vector<Long> br;
-	branch(br);
+	branch(br, m_ind);
 	for (i = 0; i < br.size(); ++i) {
 		// black moves
 		fout << "  ;" << BW;
@@ -500,10 +599,10 @@ inline void Tree::writeSGF(const string &name)
 Int Tree::rand(Long_I ind)
 {
 	Bool exist, exist_pass = false;
-	Int i, j, Nx = m_board.m_Nx, Ny = m_board.m_Ny, Nxy = Nx*Ny;
+	Int i, j, Nx = size_x(), Ny = size_y(), Nxy = Nx*Ny;
 	Char x0, y0, x, y;
 	VecInt xy;
-	vector<Long> & next = m_data[ind].m_next;
+	vector<Long> & next = m_nodes[ind].m_next;
 
 	// random sequence of all grid points on board
 	randPerm(xy, Nxy);
@@ -539,12 +638,12 @@ void Tree::winner(Long_I ind)
 int main()
 {
 	Int i;
-	Tree tree(3,3); tree.disp();
+	Tree tree(3,3); tree.disp_board();
 	cout << "black score: " << tree.score_x2()/2. << "\n\n";
 	
 	for (i = 0; i < 100; ++i) {
 		if (tree.rand() != 0) break;
-		tree.disp();
+		tree.disp_board();
 		cout << "black score: " << tree.score_x2() / 2. << "\n\n";
 	}
 	
