@@ -550,7 +550,7 @@ inline void Tree::disp_board(Long_I treeInd /*optional*/)
 			cout << "[" << Int(node.x()) << "," << Int(node.y()) << "] )";
 	}
 	
-	cout << "\n\n";
+	cout << "\n";
 	get_board(treeInd1).disp();
 	cout << '\n' << endl;
 };
@@ -562,12 +562,12 @@ inline Int Tree::pass(Long_I treeInd /*optional*/)
 	const Long treeInd1 = (treeInd < 0) ? m_treeInd : treeInd;
 	node.pass(inv(who()), treeInd1, m_nodes[treeInd1].poolInd());
 	m_nodes.push_back(node);
-	if(treeInd < 0) ++m_treeInd;
 	// check double pass (game ends)
-	if (m_nodes[treeInd1 - 1].ispass()) {
+	if (m_nodes[treeInd1].ispass()) {
 		m_nodes[treeInd1].push_next(-1);
 		return -1;
 	}
+	if(treeInd < 0) ++m_treeInd;
 	return 0;
 }
 
@@ -724,11 +724,12 @@ inline Bool Tree::next_exist(Move mov, Long_I treeInd /*optional*/)
 
 // return 0 if successful
 // return -1 if there is all legal moves are already in the tree
+// return -2 if double pass caused end of game
 // TODO: only search empty points on the board!
 Int Tree::rand_move(Long_I treeInd /*optional*/)
 {
 	Bool exist, exist_pass = false;
-	Int i, j, Nx = board_Nx(), Ny = board_Ny(), Nxy = Nx*Ny;
+	Int i, j, ret, Nx = board_Nx(), Ny = board_Ny(), Nxy = Nx*Ny;
 	Char x0, y0, x, y;
 	VecInt xy;
 	Node & node = treeInd < 0 ? m_nodes[m_treeInd] : m_nodes[treeInd];
@@ -747,7 +748,8 @@ Int Tree::rand_move(Long_I treeInd /*optional*/)
 
 	// no legal move exists, consider passing
 	if (next_exist(Move(PASS))) return -1;
-	return pass();
+	if (pass()) return -2; // double pass
+	else return 0; // first pass
 }
 
 void Tree::winner(Long_I ind)
@@ -757,15 +759,24 @@ void Tree::winner(Long_I ind)
 
 int main()
 {
-	Int i;
+	Int i, ret;
 	board_Nx(3); board_Ny(3); // set board size
 	Tree tree; tree.disp_board();
-	cout << "black score: " << tree.score_x2()/2. << "\n\n";
+	cout << "black score: " << tree.score_x2()/2. << "\n\n\n";
 	
-	for (i = 0; i < 100; ++i) {
-		if (tree.rand_move() != 0) break;
+	for (i = 0; i < 1000; ++i) {
+		ret = tree.rand_move();
+		if (ret == -1) {
+			cout << "all moves exists\n\n\n";
+			break;
+		}
+		if (ret == -2) {
+			cout << "double pass !\n\n\n";
+			break;
+		}
+		cout << "step " << i << endl;
 		tree.disp_board();
-		cout << "black score: " << tree.score_x2() / 2. << "\n\n";
+		cout << "black score: " << tree.score_x2() / 2. << "\n\n\n";
 	}
 	
 	cout << "game over!" << "\n\n";
