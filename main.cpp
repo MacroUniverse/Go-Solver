@@ -171,10 +171,10 @@ public:
 	void push_next(Long_I treeInd) { m_next.push_back(treeInd); }
 
 	void place(Char_I x, Char_I y, Who_I who, Long_I treeInd, Long_I poolInd) // already has bound checking
-	{ Move::place(x, y); m_who = who; m_last.push_back(treeInd); m_poolInd = poolInd; }
+	{ Move::place(x, y); m_who = who; push_last(treeInd); m_poolInd = poolInd; }
 
 	void pass(Who_I who, Long_I treeInd, Long_I poolInd)
-	{ Move::pass(); m_last.push_back(treeInd); m_poolInd = poolInd; m_who = who; }
+	{ Move::pass(); push_last(treeInd); m_poolInd = poolInd; m_who = who; }
 
 	~Node() {}
 };
@@ -550,12 +550,12 @@ public:
 
 	inline Int place(Char_I x, Char_I y, Long_I treeInd = -1);
 
-	inline Int islinked(Long_I ind1, Long_I ind2); // check if node ind1 can lead to node ind2
+	inline Int islinked(Long_I treeInd1, Long_I treeInd2); // check if node treeInd1 can lead to node treeInd2
 
 	// check if same board already exists in the Pool and decide if it is a Ko
 	inline Int check_ko(Int_O &search_ret, Long_O &treeInd1, Long_O &orderInd, Long_I treeInd, const Board &board);
 	
-	inline void branch(vector<Long> &br, Long_I ind); // get index vector of the a branch ending at a node
+	inline void branch(vector<Long> &br, Long_I treeInd = -1); // get an index vector of the a branch ending at a node
 
 	inline void writeSGF(const string &name);
 
@@ -653,7 +653,7 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 	if (treeInd1 == 0) {
 		board.place(x, y, BLACK);
 		m_pool.push(board, -3, 0, treeInd1);
-		node.place(x, y, BLACK, -1, m_pool.size()-1);
+		node.place(x, y, BLACK, treeInd1, m_pool.size()-1);
 		m_nodes.push_back(node);
 		if (treeInd < 0) m_treeInd = 1;
 		return 0;
@@ -729,18 +729,19 @@ inline Int Tree::check_ko(Int_O &search_ret, Long_O &treeInd1, Long_O &orderInd,
 }
 
 // if multiple paths exists choose the first one for now
-inline void Tree::branch(vector<Long> &br, Long_I ind)
+inline void Tree::branch(vector<Long> &br, Long_I treeInd /*optional*/)
 {
 	Int i, Nbr;
-	Long ind1 = m_treeInd;
+	Long treeInd1 = treeInd < 0 ? m_treeInd : treeInd;
 	br.resize(0);
 	for (i = 0; i < 10000; ++i) {
-		br.push_back(ind1);
-		ind1 = m_nodes[ind1].last(0);
-		if (ind1 == -1) break;
+		if (treeInd1 == 0) break;
+		br.push_back(treeInd1);
+		if (m_nodes[treeInd1].nlast() == 0) error("unknown error!");
+		treeInd1 = m_nodes[treeInd1].last(0);
 	}
 	Nbr = br.size();
-	for (i = Nbr / 2; i > -1; --i) {
+	for (i = Nbr / 2 - 1; i > -1; --i) {
 		SWAP(br[Nbr - i - 1], br[i]);
 	}
 }
@@ -763,7 +764,7 @@ inline void Tree::writeSGF(const string &name)
 	Char BW = 'B'; // letter B or letter W
 	Int i; Char x, y;
 	vector<Long> br;
-	branch(br, m_treeInd);
+	branch(br);
 	for (i = 0; i < br.size(); ++i) {
 		// black moves
 		fout << "  ;" << BW;
@@ -837,13 +838,17 @@ Int Tree::rand_move1(Long_I treeInd /*optional*/)
 	for (i = 0; i < Nxy; ++i) {
 		x = xy[i] % Nx; y = xy[i] / Nx;
 		// check existence
-		if (next_exist(Move(x, y))) continue;
+		if (next_exist(Move(x, y)))
+			continue;
 		// check dumb eye filling
 		if (get_board().is_dumb_eye_filling(x, y, next(who()))) {
-			dumb_xy.push_back(i); ++i; continue;
+			dumb_xy.push_back(i);
+			continue;
 		}
-		if (place(x, y) < 0) continue;
-		else return 0;
+		if (place(x, y) < 0)
+			continue;
+		else
+			return 0;
 	}
 
 	// no non-dumb placing left, consider passing
@@ -880,11 +885,11 @@ int main()
 	Tree tree;
 	
 	// edit board here
-	/*tree.place(0, 0); tree.pass();
-	tree.place(0, 2); tree.pass();
-	tree.place(1, 1); tree.pass();
-	tree.place(2, 1); tree.pass();
-	tree.place(2, 2); tree.place(2, 0);*/
+	/*tree.place(0, 0); tree.place(1, 2);
+	tree.place(2, 2); tree.place(1, 1);
+	tree.place(0, 2); tree.place(0, 1);
+	tree.place(2, 1); tree.place(1, 0);
+	tree.pass();*/
 	// end edit board
 
 	tree.disp_board();
