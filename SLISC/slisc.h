@@ -338,9 +338,9 @@ Matrix<T>::Matrix(Long_I Nr, Long_I Nc, const T *ptr) : Matrix(Nr, Nc)
 { memcpy(m_p, ptr, m_N*sizeof(T)); }
 
 template <class T>
-Matrix<T>::Matrix(const Matrix<T> &rhs)
+Matrix<T>::Matrix(const Matrix<T> &rhs) : Matrix()
 {
-	error("Copy constructor or move constructor is forbidden, use reference argument for function input or output, and use \"=\" to copy!");
+	*this = rhs;
 }
 
 template <class T>

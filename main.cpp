@@ -78,8 +78,8 @@ public:
 	Bool ispass() { return m_x == -1; }
 	Bool isedit() { return m_x == -2; }
 	Bool isinit() { return m_x == -3; }
-	Int type() // 0: isplace(), 1: ispass(), 2: isedit(), 3: isinit()
-	{ return isplace()? 0: ispass()? 1: isedit()? 2: 3; }
+	Act type() // 0: isplace(), 1: ispass(), 2: isedit(), 3: isinit()
+	{ return isplace()? PLACE: ispass()? PASS: isedit()? EDIT: INIT; }
 	inline Char_O x();
 	inline Char_O y();
 	Bool operator==(const Move &rhs) const;
@@ -165,7 +165,7 @@ public:
 	Long next(Int_I ind) const { return m_next[ind]; }
 
 	// set
-	void init() { Move::init(); m_last.resize(0); m_who = NONE; }
+	void init(Long_I poolInd) { Move::init(); m_last.resize(0); m_who = NONE; m_poolInd = poolInd; }
 	void push_last(Long_I treeInd) { m_last.push_back(treeInd); }
 	void push_next(Long_I treeInd) { m_next.push_back(treeInd); }
 
@@ -173,7 +173,7 @@ public:
 	{ Move::place(x, y); m_who = who; m_last.push_back(treeInd); m_poolInd = poolInd; }
 
 	void pass(Who_I who, Long_I treeInd, Long_I poolInd)
-	{ Move::pass(); m_last.push_back(treeInd); m_poolInd = poolInd; }
+	{ Move::pass(); m_last.push_back(treeInd); m_poolInd = poolInd; m_who = who; }
 
 	~Node() {}
 };
@@ -295,7 +295,7 @@ inline Int Board::place(Char_I x, Char_I y, Who_I who)
 		if (qi == 0) remove_group();
 	}
 
-	if (y < Ny && m_data(x, y + 1) == inv(who)) {
+	if (y < Ny - 1 && m_data(x, y + 1) == inv(who)) {
 		connect_init();
 		connect(x, y + 1);
 		if (qi == 0) remove_group();
@@ -321,7 +321,7 @@ inline Int Board::place(Char_I x, Char_I y, Who_I who)
 		if (qi == 0) return -2;
 	}
 
-	if (y < Ny && m_data(x, y + 1) == who) {
+	if (y < Ny - 1 && m_data(x, y + 1) == who) {
 		connect_init();
 		connect(x, y + 1);
 		if (qi == 0) return -2;
@@ -454,7 +454,8 @@ public:
 Int Pool::search(Long_O treeInd, Long_O orderInd, const Board &board)
 {
 	Int ret = lookupInt(orderInd, *this, board);
-	treeInd = m_treeInd[m_order[orderInd]];
+	if (ret == 0)
+		treeInd = m_treeInd[m_order[orderInd]];
 	return ret;
 }
 
@@ -462,10 +463,9 @@ Int Pool::search(Long_O treeInd, Long_O orderInd, const Board &board)
 // orderInd should be -3, -2, -1 or 1
 inline void Pool::push(const Board &board, Int_I search_ret, Long_I orderInd, Long_I treeInd)
 {
-	m_boards.resize(m_boards.size()+1);
-	m_boards.back() = board;
+	m_boards.push_back(board);
 	m_treeInd.push_back(treeInd);
-	Long poolInd = m_boards.size();
+	Long poolInd = m_boards.size()-1;
 	if (search_ret == -2)
 		m_order.insert(m_order.begin() + orderInd + 1, poolInd);
 	else if (search_ret == -1)
@@ -474,14 +474,6 @@ inline void Pool::push(const Board &board, Int_I search_ret, Long_I orderInd, Lo
 		m_order.push_back(poolInd);
 	else
 		error("Pool::push(): unknown search_ret!");
-}
-
-// return 0 if a new board is added
-// return index to the same board if "Ko" happens
-// return -1 if move is illegal
-inline Int place(Long_I ind, Char_I x, Char_I y)
-{
-
 }
 
 // game tree
@@ -500,7 +492,11 @@ public:
 
 	// peoperties
 	const Board & get_board(Long_I treeInd = -1) const // reference to the Board obj of a node
-	{ return m_pool.m_boards[treeInd<0 ? m_treeInd : treeInd]; }
+	{
+		Long treeInd1 = (treeInd < 0) ? m_treeInd : treeInd;
+		Long poolInd = m_nodes[treeInd1].poolInd();
+		return m_pool.m_boards[poolInd];
+	}
 
 	inline Long last(Long_I treeInd = -1, Int_I forkInd = 0) const; // return an index of the last node of a node
 
@@ -508,7 +504,7 @@ public:
 	{ return m_nodes[last(treeInd, forkInd)]; }
 
 	Who who(Long_I treeInd = -1) // who played the current step
-	{ return m_nodes[treeInd < -1 ? m_treeInd : treeInd ].who(); }
+	{ return m_nodes[treeInd < 0 ? m_treeInd : treeInd ].who(); }
 
 	inline void disp_board(Long_I treeInd = -1); // display board
 
@@ -519,7 +515,7 @@ public:
 	inline Int islinked(Long_I ind1, Long_I ind2); // check if node ind1 can lead to node ind2
 
 	// check if same board already exists in the Pool and decide if it is a Ko
-	inline Int check_ko(Long_O &treeInd1, Long_O &orderInd, Long_I treeInd, const Board &board);
+	inline Int check_ko(Int_O &search_ret, Long_O &treeInd1, Long_O &orderInd, Long_I treeInd, const Board &board);
 	
 	inline void branch(vector<Long> &br, Long_I ind); // get index vector of the a branch ending at a node
 
@@ -540,10 +536,10 @@ public:
 // create 0-th node: empty board
 Tree::Tree() : m_treeInd(0)
 {
-	Node node; node.init();
-	m_nodes.push_back(node);
 	Board board(board_Nx(), board_Ny());
 	m_pool.push(board, -3, 0, 0);
+	Node node; node.init(m_pool.size()-1);
+	m_nodes.push_back(node);
 }
 
 inline Long Tree::last(Long_I treeInd /*optional*/, Int_I forkInd /*optional*/) const
@@ -556,8 +552,9 @@ inline Long Tree::last(Long_I treeInd /*optional*/, Int_I forkInd /*optional*/) 
 inline void Tree::disp_board(Long_I treeInd /*optional*/)
 {
 	Char x, y;
-	const Long treeInd1 = treeInd < 0 ? m_treeInd : treeInd;
-	if (m_nodes[treeInd1].isinit())
+	Long treeInd1 = treeInd < 0 ? m_treeInd : treeInd;
+	Node & node = m_nodes[treeInd1];
+	if (node.isinit())
 		cout << "(empty)";
 	else {
 		if (who() == BLACK)
@@ -567,14 +564,16 @@ inline void Tree::disp_board(Long_I treeInd /*optional*/)
 		else
 			error("Tree:disp(): illegal side name!");
 
-		if (m_nodes[treeInd1].type() == 1)
+		if (node.ispass())
 			cout << "pass)";
+		else if (node.isedit())
+			cout << "edit board)";
 		else
-			cout << "[" << Int(x) << "," << Int(y) << "] )";
+			cout << "[" << Int(node.x()) << "," << Int(node.y()) << "] )";
 	}
 	
 	cout << "\n\n";
-	get_board(treeInd).disp();
+	get_board(treeInd1).disp();
 	cout << '\n' << endl;
 };
 
@@ -599,9 +598,10 @@ inline Int Tree::pass(Long_I treeInd /*optional*/)
 inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 {
 	Int ret;
-	const Long treeInd1 = (treeInd1 < 0) ? m_treeInd : treeInd;
+	const Long treeInd1 = (treeInd < 0) ? m_treeInd : treeInd;
 	Node node;
-	Board board = get_board();
+	Board board;
+	board = get_board();
 	// first move
 	if (treeInd1 == 0) {
 		board.place(x, y, BLACK);
@@ -613,15 +613,14 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 	}
 
 	// update board and check illegal move (Ko no checked!)
-	if (board.place(x, y, inv(who())) != 0) {
-		error("Tree::place(x,y): illegal move!");
+	if (board.place(x, y, inv(who())) != 0)
 		return -1;
-	}
 
 	// check Ko
+	Int search_ret;
 	Long orderInd;
 	Long treeInd_ko;
-	ret = check_ko(treeInd_ko, orderInd, treeInd1, board);
+	ret = check_ko(search_ret, treeInd_ko, orderInd, treeInd1, board);
 	if (ret < 0) { // board already exists
 		if (ret == -1) { // not a ko
 			node.push_next(treeInd_ko);
@@ -634,8 +633,8 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 	
 	// board is new
 	// push board to pool
-	m_pool.push(board, ret, orderInd, treeInd1+1);
-	node.place(x, y, inv(who()), treeInd1, m_pool.size() + 1);
+	m_pool.push(board, search_ret, orderInd, treeInd1+1);
+	node.place(x, y, inv(who()), treeInd1, m_pool.size()-1);
 
 	// add Node to tree
 	node.push_next(treeInd1 + 1);
@@ -668,11 +667,11 @@ inline Int Tree::islinked(Long_I treeInd1, Long_I treeInd2)
 // if board already exists, output tree index of the same board
 // if it is not a ko, return -1, if a ko is found, return -2
 // (in case of multiple upward fork, there might be no ko for some branches!)
-inline Int Tree::check_ko(Long_O &treeInd1, Long_O &orderInd, Long_I treeInd, const Board &board)
+inline Int Tree::check_ko(Int_O &search_ret, Long_O &treeInd1, Long_O &orderInd, Long_I treeInd, const Board &board)
 {
-	Int ret = m_pool.search(treeInd1, orderInd, board);
+	search_ret = m_pool.search(treeInd1, orderInd, board);
 	// board already exists
-	if (ret == 0) {
+	if (search_ret == 0) {
 		// a Ko!
 		if (islinked(treeInd1, treeInd)) return -2;
 		return -1;
@@ -719,10 +718,11 @@ inline void Tree::writeSGF(const string &name)
 	for (i = 0; i < br.size(); ++i) {
 		// black moves
 		fout << "  ;" << BW;
-		if (m_nodes[br[i]].ispass()) // pass
+		Node & node = m_nodes[br[i]];
+		if (node.ispass()) // pass
 			fout << "[]\n";
 		else
-			fout << '[' << char('a' + x) << char('a' + y) << "]\n";
+			fout << '[' << char('a' + node.x()) << char('a' + node.y()) << "]\n";
 		BW = BW == 'B' ? 'W' : 'B';
 	}
 	fout << ")\n";

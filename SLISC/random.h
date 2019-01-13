@@ -43,12 +43,12 @@ namespace slisc
 
 	// generate random Int in {0,1,2,...,N-1}
 	inline Int randInt(Int N)
-	{ return Int(round(Doub(N + 1)*rand() - 0.5)); }
+	{ return Int(round(N*rand() - 0.5)); }
 
 	// generate a random permutation of {0,1,2,...,N-1}
-	inline void randPerm(VecInt_O perm, Int_I N)
+	inline void randPerm(VecInt_O &perm, Int_I N)
 	{
-		Int j, n = N, ind;
+		Int j, n, ind;
 		VecInt pool;
 		linspace(pool, 0, N - 1, N);
 		perm.resize(N);
