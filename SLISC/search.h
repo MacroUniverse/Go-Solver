@@ -20,18 +20,20 @@ Int lookupInt(Long_O &ind, const T1 &v, const T &s)
 	if (s == v[0]) {
 		ind = 0; return 0;
 	}
+	// N >= 2 from here
 	if (s == v[ind2]) {
 		ind = ind2; return 0;
 	}
+	// N > 2 from here
 	for (i = 0; i < N; ++i) {
 		ind = (ind1 + ind2) / 2;
 		if (s == v[ind]) return 0;
 		if (s < v[ind]) ind2 = ind;
-		ind1 = ind;
+		else ind1 = ind;
 		if (ind2 - ind1 == 1) {
 			ind = ind1; return -2;
 		}
 	}
-	return 0;
+	error("slisc::lookup(): unknown error!");
 }
 } // namespace slisc

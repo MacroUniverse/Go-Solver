@@ -80,8 +80,8 @@ public:
 	Bool isinit() { return m_x == -3; }
 	Act type() // 0: isplace(), 1: ispass(), 2: isedit(), 3: isinit()
 	{ return isplace()? PLACE: ispass()? PASS: isedit()? EDIT: INIT; }
-	inline Char_O x();
-	inline Char_O y();
+	inline Char x();
+	inline Char y();
 	Bool operator==(const Move &rhs) const;
 
 	// edit
@@ -100,7 +100,7 @@ inline Move::Move(Char_I x, Char_I y) : m_x(x), m_y(y)
 #endif
 }
 
-inline Char_O Move::x()
+inline Char Move::x()
 {
 #ifdef _CHECK_BOUND_
 	if ( m_x < 0 ) error("Move::x(): not a coord!");
@@ -108,7 +108,7 @@ inline Char_O Move::x()
 	return m_x;
 }
 
-inline Char_O Move::y()
+inline Char Move::y()
 {
 #ifdef _CHECK_BOUND_
 	if (m_x < 0) error("Move::y(): not a coord!");
@@ -197,9 +197,7 @@ public:
 	{ m_data = NONE; m_mark = 0; }
 
 	inline Bool operator==(const Board &rhs) const
-	{ return this->m_data == rhs.m_data; }
-
-	inline Bool operator<(const Board &rhs) const; // comparation for sorting
+	{ return m_data == rhs.m_data; }
 
 	inline void disp() const; // display board on screen
 
@@ -218,13 +216,13 @@ public:
 	~Board() {}
 };
 
-// imagine Board::m_data as a long integer, try two compare two integers
-inline Bool Board::operator<(const Board &rhs) const
+// imagine Board::m_data as a long integer, try to compare two integers
+inline Bool operator<(const Board &board1, const Board &board2)
 {
 	Int i, N = board_Nx() * board_Ny();
 	for (i = 0; i < N; ++i) {
-		if (this->m_data(i) == rhs.m_data(i)) continue;
-		if (this->m_data(i) < rhs.m_data(i)) return true;
+		if (board1.m_data(i) == board2.m_data(i)) continue;
+		if (board1.m_data(i) < board2.m_data(i)) return true;
 		return false;
 	}
 	return false;
@@ -269,63 +267,42 @@ inline Int Board::place(Char_I x, Char_I y, Who_I who)
 	// check if already occupied
 	if (m_data(x,y) != NONE)
 		return -1;
-	// TODO: check other illegal cases
 
 	// place stone
 	m_data(x,y) = who;
 
-	// === remove dead stones ===
-
-	// if placed next to opposite stone
+	// remove opponent's dead stones
+	// only necessary if placed next to opposite stone
+	connect_init();
 	if (x > 0 && m_data(x - 1, y) == inv(who)) {
-		connect_init();
 		connect(x - 1, y);
 		if (qi == 0) remove_group();
 	}
 
-	if (x < Nx - 1 && m_data(x + 1, y) == inv(who)) {
+	if (x < Nx - 1 && m_data(x + 1, y) == inv(who) && !m_mark(x + 1, y)) {
 		connect_init();
 		connect(x + 1, y);
 		if (qi == 0) remove_group();
 	}
 
-	if (y > 0 && m_data(x, y - 1) == inv(who)) {
+	if (y > 0 && m_data(x, y - 1) == inv(who) && !m_mark(x, y - 1)) {
 		connect_init();
 		connect(x, y - 1);
 		if (qi == 0) remove_group();
 	}
 
-	if (y < Ny - 1 && m_data(x, y + 1) == inv(who)) {
+	if (y < Ny - 1 && m_data(x, y + 1) == inv(who) && !m_mark(x, y + 1)) {
 		connect_init();
 		connect(x, y + 1);
 		if (qi == 0) remove_group();
 	}
 
-	// if placed next to same color stone
+	// check qi of placed stone
+	connect_init();
+	connect(x, y);
+	if (qi == 0) return -2;
 
-	if (x > 0 && m_data(x - 1, y) == who) {
-		connect_init();
-		connect(x - 1, y);
-		if (qi == 0) return -2;
-	}
-
-	if (x < Nx - 1 && m_data(x + 1, y) == who) {
-		connect_init();
-		connect(x + 1, y);
-		if (qi == 0) return -2;
-	}
-
-	if (y > 0 && m_data(x, y - 1) == who) {
-		connect_init();
-		connect(x, y - 1);
-		if (qi == 0) return -2;
-	}
-
-	if (y < Ny - 1 && m_data(x, y + 1) == who) {
-		connect_init();
-		connect(x, y + 1);
-		if (qi == 0) return -2;
-	}
+	return 0;
 }
 
 inline void Board::connect_init()
@@ -335,6 +312,7 @@ inline void Board::connect_init()
 	qi = 0;
 }
 
+// get a group of stones with the same color that are connected to stone (x,y)
 inline void Board::connect(Char_I x, Char_I y)
 {
 	Char Nx = board_Nx(), Ny = board_Ny();
@@ -445,13 +423,13 @@ public:
 
 	// search Pool: find ind so that *this[ind] == board
 	// TODO: improve implementation (stone by stone algorithm)
-	Int search(Long_O treeInd, Long_O orderInd, const Board &board);
+	Int search(Long_O &treeInd, Long_O &orderInd, const Board &board);
 
 	// add a new board to the Pool
 	inline void push(const Board &board, Int_I search_ret, Long_I orderInd, Long_I treeInd);
 };
 
-Int Pool::search(Long_O treeInd, Long_O orderInd, const Board &board)
+Int Pool::search(Long_O &treeInd, Long_O &orderInd, const Board &board)
 {
 	Int ret = lookupInt(orderInd, *this, board);
 	if (ret == 0)
@@ -593,7 +571,10 @@ inline Int Tree::pass(Long_I treeInd /*optional*/)
 	return 0;
 }
 
-// return 0 if legal, -1 if illegal and show error
+// return 0 if new node created (m_treeInd++)
+// return 1 if linked to an existing node (m_treeInd jumped)
+// return -1 if illegal (nothing changes)
+// return -2 if a ko is found and linked (m_treeInd unchanged)
 // already has bound checking
 inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 {
@@ -613,7 +594,7 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 	}
 
 	// update board and check illegal move (Ko no checked!)
-	if (board.place(x, y, inv(who())) != 0)
+	if (board.place(x, y, inv(who())))
 		return -1;
 
 	// check Ko
@@ -624,11 +605,13 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 	if (ret < 0) { // board already exists
 		if (ret == -1) { // not a ko
 			node.push_next(treeInd_ko);
+			if (treeInd < 0) m_treeInd = treeInd_ko;
+			return 1;
 		}
 		else if (ret == -2) { // is a ko
 			node.push_next(-treeInd_ko - 1);
+			return -2;
 		}
-		return 0;
 	}
 	
 	// board is new
@@ -672,9 +655,9 @@ inline Int Tree::check_ko(Int_O &search_ret, Long_O &treeInd1, Long_O &orderInd,
 	search_ret = m_pool.search(treeInd1, orderInd, board);
 	// board already exists
 	if (search_ret == 0) {
-		// a Ko!
-		if (islinked(treeInd1, treeInd)) return -2;
-		return -1;
+		if (islinked(treeInd1, treeInd))
+			return -2; // Ko!
+		return -1; // no Ko
 	}
 	return 0;
 }
@@ -741,6 +724,7 @@ inline Bool Tree::next_exist(Move mov, Long_I treeInd /*optional*/)
 
 // return 0 if successful
 // return -1 if there is all legal moves are already in the tree
+// TODO: only search empty points on the board!
 Int Tree::rand_move(Long_I treeInd /*optional*/)
 {
 	Bool exist, exist_pass = false;
@@ -757,7 +741,7 @@ Int Tree::rand_move(Long_I treeInd /*optional*/)
 		x = xy[i] % Nx; y = xy[i] / Nx;
 		// check existence
 		if (next_exist(Move(x, y))) continue;
-		if (place(x, y)) continue;
+		if (place(x, y) < 0) continue;
 		else return 0;
 	}
 

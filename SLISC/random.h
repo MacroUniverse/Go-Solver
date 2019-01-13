@@ -56,7 +56,7 @@ namespace slisc
 			ind = randInt(n);
 			perm[n - 1] = pool(ind);
 			for (j = ind; j < n - 1; ++j)
-				pool(ind) = pool(ind + 1);
+				pool(j) = pool(j + 1);
 		}
 	}
 
