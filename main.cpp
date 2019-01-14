@@ -56,6 +56,32 @@ inline Char board_Ny(Char_I Ny = -1)
 	return Ny0;
 }
 
+// board size Ny, may only set once
+// should only be integer or half integers
+inline Int komi2(Int_I k2 = -1132019)
+{
+	static Doub k20 = -1132019;
+	if (k2 != -1132019)
+		k20 = k2; // set komi
+	else if (k20 == -1132019)
+		error("komi(): komi unset!");
+	return k20;
+}
+
+// return winner of the game
+// bscore4 is black score multiplied by 4
+// see Board::bscore4() function
+Who winner(Int_I bscore4)
+{
+	Int draw4 = board_Nx()*board_Ny() * 2;
+	if (bscore4 > draw4)
+		return BLACK;
+	else if (bscore4 < draw4)
+		return WHITE;
+	else if (bscore4 == draw4)
+		return DRAW;
+}
+
 // coordinates for a move, or "pass"
 // origin at top left, x axis points right, y axis points down
 // special codes:
@@ -143,11 +169,11 @@ private:
 	Who m_who; // who's turn is this?
 	vector<Long> m_last; // -1: first node
 	vector<Long> m_next; // -1: end node
-	Who m_win; // if two gods playing, who will win?
 	Long m_poolInd; // pool index, board stored in Pool::m_board[m_pool_ind]
 public:
+	Who m_win; // if two gods playing, who will win?
 
-	Node() {}
+	Node(): m_win(UNKNOWN) {}
 	
 	// properties
 	using Move::isplace;
@@ -212,7 +238,7 @@ public:
 	// remove group if it is dead after placing (x,y)
 	inline void remove_group();
 
-	inline Int score_x2() const; // count black result (multiplied by 2)
+	inline Int bscore4() const; // calculate black score (multiplied by 2)
 
 	inline Bool is_eye(Char_I x, Char_I y, Who_I who) const;
 
@@ -375,8 +401,9 @@ inline void Board::remove_group()
 }
 
 // this will be accurate when no legal move exists
-// back score = # of black on board + single "qi" surrounded by black + (other empty space)/2
-inline Int Board::score_x2() const
+// back score = # black on board + # single qi's surrounded by black + (other qi's)/2 - komi/2
+// black wins if score > (total grids on board)/2 + 0.1
+inline Int Board::bscore4() const
 {
 	Char x, y, Nx = board_Nx(), Ny = board_Ny();
 	Int black = 0, qi = 0, common_qi = 0;
@@ -405,7 +432,7 @@ inline Int Board::score_x2() const
 			else if (s != WHITE)
 				error("Board::result(): illegal stone!");
 		}
-	return 2 * black + 2 * qi + common_qi;
+	return 4*(black + qi) + 2*common_qi - komi2();
 }
 
 inline Bool Board::is_eye(Char_I x, Char_I y, Who_I who) const
@@ -569,10 +596,16 @@ public:
 	// will not fill single eye unless it could be destroyed immediately, or if all other moves already exists
 	inline Int rand_move1(Long_I treeInd = -1);
 
-	inline void winner(Long_I node); // analyse who has winning strategy for a node
+	// randomly play to the end of the game from a node (default: from top node)
+	inline Int rand_game(Long_I treeInd = 0, Bool_I out = false);
 
-	inline Int score_x2(Long_I treeInd = -1) const
-	{ return get_board(treeInd < 0? m_treeInd : treeInd).score_x2(); }
+	inline void solve(Long_I treeInd = -1); // analyse who has winning strategy for a node
+
+	inline Int bscore4(Long_I treeInd = -1) const // black score times 4
+	{ return get_board(treeInd < 0? m_treeInd : treeInd).bscore4(); }
+
+	inline Int wscore4(Long_I treeInd = -1) const // white score times 4
+	{ return 4*board_Nx()*board_Ny() - bscore4(); }
 
 	~Tree() {}
 };
@@ -631,6 +664,7 @@ inline Int Tree::pass(Long_I treeInd /*optional*/)
 	// check double pass (game ends)
 	if (m_nodes[treeInd1].ispass()) {
 		m_nodes[treeInd1].push_next(-1);
+		if (treeInd < 0) ++m_treeInd;
 		return -1;
 	}
 	if(treeInd < 0) ++m_treeInd;
@@ -757,7 +791,7 @@ inline void Tree::writeSGF(const string &name)
 	if (Nx == Ny)
 		fout << "SZ[" << Int(Nx) << "]";
 	else
-		fout << "SZ[" << Nx << ":" << Ny << "]";
+		fout << "SZ[" << Int(Nx) << ":" << Int(Ny) << "]";
 	fout << "DT[]\n";
 
 	// write a branch
@@ -821,7 +855,7 @@ Int Tree::rand_move(Long_I treeInd /*optional*/)
 // return 0 if successful
 // return -1 if there is all legal moves already exists
 // return -2 if double pass caused end of game
-// return 1 if successful bug dumb
+// return 1 if successful but dumb
 Int Tree::rand_move1(Long_I treeInd /*optional*/)
 {
 	Bool exist, exist_pass = false;
@@ -868,9 +902,120 @@ Int Tree::rand_move1(Long_I treeInd /*optional*/)
 	return -1; // all leagl moves already exist
 }
 
-void Tree::winner(Long_I ind)
+// m_treeInd will be changed to the end node!
+// the end node will have the correct Node::m_win
+// using rand_move1() currently
+// set "out = true" for output to terminal and test.sgf
+inline Int Tree::rand_game(Long_I treeInd, Bool_I out)
 {
-	// TODO: this might be difficult
+	Int i, ret;
+	Tree tree;
+	Doub bscore4;
+
+	m_treeInd = treeInd;
+	
+	// debug: edit board here
+	/*tree.place(0, 0); tree.place(1, 2);
+	tree.place(2, 2); tree.place(1, 1);
+	tree.place(0, 2); tree.place(0, 1);
+	tree.place(2, 1); tree.place(1, 0);
+	tree.pass();*/
+	// end edit board
+
+	// tree.disp_board();
+
+	for (i = 1; i < 10000; ++i) {
+		ret = tree.rand_move1();
+		if (ret == -1) {
+			if (out) cout << "all moves exists\n\n\n";
+			break;
+		}
+		if (ret == -2) {
+			if (out) cout << "double pass !\n\n\n";
+			break;
+		}
+		if (out) cout << "step " << i << endl;
+		if (out) tree.disp_board();
+	}
+	
+	if (out) cout << "game over!" << "\n\n";
+	bscore4 = tree.bscore4();
+	
+	if (winner(bscore4) == BLACK) {
+		m_nodes[m_treeInd].m_win = BLACK;
+		if (out) cout << "black wins!";
+		if (out) cout << "  (score: " << 0.25*bscore4 << ")\n\n";
+	}
+	else if (winner(bscore4) == WHITE) {
+		m_nodes[m_treeInd].m_win = WHITE;
+		if (out) cout << "white wins!";
+		if (out) cout << "  (score: " << board_Nx()*board_Ny() - 0.25*bscore4 << ")\n\n";
+	}
+	else { // draw
+		m_nodes[m_treeInd].m_win = DRAW;
+		if (out) cout << "draw!\n\n";
+	}
+	if (out) tree.writeSGF("test.sgf");
+}
+
+// might m_treeInd be changed? it shouldn't
+// use as a recursive function for now (stack might overflow)
+void Tree::solve(Long_I treeInd /*optional*/)
+{
+	Int i, ret;
+	if (treeInd >= 0) m_treeInd = treeInd;
+
+	// get a branch from treeInd to the bottom
+	// (the smarter the moves are, the easier it can be solved)
+	// (the shorter it is, the easier it can be solved)
+	// use rand_game() for now
+	
+	rand_game(m_treeInd);
+
+	// better to solve it's wave down recursively
+	// assuming there is the only branch after m_treeInd for now
+
+	// try to solve the only existing child first
+	// rule No.1
+	if (m_nodes[m_nodes[m_treeInd].next(0)].m_win == next(who())) {
+		m_nodes[m_treeInd].m_win = next(who()); return; // solved
+	}
+	else {
+		solve(m_nodes[m_treeInd].next(0)); // solve the only existing child
+	}
+	
+	// create another chil and try to solve it in each loop
+	for (i = 0; i < 10000; ++i) {
+		// return 0 if successful
+		// return -1 if there is all legal moves already exists
+		// return -2 if double pass caused end of game
+		// return 1 if successful but dumb
+		ret = rand_move1();
+		if (ret == 0) {
+			solve(m_nodes[m_treeInd].next(0));
+		}
+		else if (ret == 1)
+			; // save for later to solve
+		if (ret == -1) {
+			break;
+		}
+		if (ret == -2) {
+			// use rule No.1
+			// then use rule No.2, record if it is a draw
+			continue;
+		}
+	}
+
+	// rule No 2, must solve all children one by one
+	for (i = 0; i < m_nodes[m_treeInd].nnext(); ++i) {
+
+	}
+
+
+	if (who() == m_nodes[m_treeInd].m_win) {
+		m_treeInd = m_nodes[m_treeInd].last(0);
+	}
+	//
 }
 
 // initialize class static members
@@ -881,8 +1026,10 @@ Int Board::qi; // qi of group
 int main()
 {
 	Int i, ret;
-	board_Nx(3); board_Ny(3); // set board size
+	board_Nx(9); board_Ny(9); // set board size
+	komi2(13); // set koomi
 	Tree tree;
+	Doub bscore4;
 	
 	// edit board here
 	/*tree.place(0, 0); tree.place(1, 2);
@@ -892,24 +1039,5 @@ int main()
 	tree.pass();*/
 	// end edit board
 
-	tree.disp_board();
-	cout << "black score: " << tree.score_x2() / 2. << "\n\n\n";
-
-	for (i = 0; i < 1000; ++i) {
-		ret = tree.rand_move1();
-		if (ret == -1) {
-			cout << "all moves exists\n\n\n";
-			break;
-		}
-		if (ret == -2) {
-			cout << "double pass !\n\n\n";
-			break;
-		}
-		cout << "step " << i << endl;
-		tree.disp_board();
-		cout << "black score: " << tree.score_x2() / 2. << "\n\n\n";
-	}
-	
-	cout << "game over!" << "\n\n";
-	tree.writeSGF("test.sgf");
+	tree.rand_game(0, false);
 }
