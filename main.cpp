@@ -6,6 +6,7 @@
 #include "SLISC/slisc.h"
 #include "SLISC/random.h"
 #include "SLISC/search.h"
+#include "SLISC/time.h"
 
 #ifndef NDEBUG
 #define _CHECK_BOUND_
@@ -13,7 +14,8 @@
 
 using namespace slisc;
 using std::vector; using std::string;
-using std::ofstream; using std::cout; using std::endl;
+using std::ofstream; using std::cout;
+using std::cin; using std::endl;
 
 enum Who { NONE, BLACK, WHITE, UNKNOWN, DRAW }; // TODO: make this a char type
 
@@ -1266,19 +1268,178 @@ MatChar Board::m_mark; // 0: unmarked, 1: marked, else: not used yet
 vector<Move> Board::m_group; // a group of connected stones
 Int Board::m_qi; // qi of group
 
-int main()
+// run this for stand along program
+void computer_vs_computer_ui()
 {
-	board_Nx(9); board_Ny(9); // set board size
-	komi2(18); // set koomi
+	Int Nx, Ny;
+	Doub komi;
+	cout << "random game..." << endl;
+	cout << "input board size x : "; cin >> Nx;
+	cout << "input board size y : "; cin >> Ny;
+	cout << "input komi : "; cin >> komi;
+	board_Nx(Nx); board_Ny(Ny); // set board size
+	komi2(round(komi * 2)); // set koomi
 	Tree tree;
-	
-	// edit board here
-	/*tree.place(0, 1); tree.place(1, 0);
-	tree.place(0, 2); tree.place(2, 0);
-	tree.place(1, 1); tree.place(2, 1);
-	tree.place(1, 2); tree.pass();
-	tree.place(2, 2);*/
-	// end edit board
 
 	tree.rand_game(0, true);
+	getchar();
+	getchar();
+}
+
+// run this for stand alone human vs computer
+void human_vs_computer_ui()
+{
+	Int Nx, Ny, ret, i = 0, bscore4, x, y;
+	Doub komi;
+	Char color;
+	cout << "human vs computer..." << endl;
+	cout << "input board size x : "; cin >> Nx;
+	cout << "input board size y : "; cin >> Ny;
+	cout << "input komi : "; cin >> komi;
+	cout << "your color : "; cin >> color;
+
+	board_Nx(Nx); board_Ny(Ny); // set board size
+	komi2(round(komi * 2)); // set koomi
+	Tree tree;
+
+	i = 0;
+	cout << "\n\nstep " << i << " "; ++i;
+	tree.disp_board();
+
+	if (color == 'b' || color == 'B') {
+		for (; i < 10000; ++i) {
+			// human move
+			cout << "input x y (negative to pass): ";
+			cin >> x >> y;
+			if (x < 0 || y < 0) {
+				if (tree.pass()) // pass !
+					break; // double pass !
+			}
+			if (tree.place(x, y)) {
+				error("illegal move!");
+			}
+			cout << "step " << i << " ";
+			tree.disp_board();
+
+			// computer move
+			ret = tree.rand_smart_move();
+			if (ret == -1)
+				error("unkown error!");
+			if (ret == -2) {
+				cout << "double pass !\n\n\n";
+				break;
+			}
+			cout << "step " << i << " ";
+			tree.disp_board();
+		}
+	}
+	else if (color == 'w' || color == 'W') {
+		for (; i < 10000; ++i) {
+			// computer move
+			ret = tree.rand_smart_move();
+			if (ret == -1)
+				error("unkown error!");
+			if (ret == -2) {
+				cout << "double pass !\n\n\n";
+				break;
+			}
+			cout << "step " << i << " ";
+			tree.disp_board();
+
+			// human move
+			cout << "input x y (negative to pass): ";
+			cin >> x >> y;
+			if (x < 0 || y < 0) {
+				if (tree.pass()) // pass !
+					break; // double pass !
+			}
+			if (tree.place(x, y)) {
+				error("illegal move!");
+			}
+			cout << "step " << i << " ";
+			tree.disp_board();
+		}
+	}
+	else
+		error("illegal color! must be 'b' or 'w'!");
+
+	cout << "game over!" << "\n\n";
+	bscore4 = tree.bscore4();
+
+	if (winner(bscore4) == BLACK) {
+		cout << "black wins!";
+		cout << "  (score: " << 0.25*bscore4 << ")\n\n";
+	}
+	else if (winner(bscore4) == WHITE) {
+		cout << "white wins!";
+		cout << "  (score: " << board_Nx()*board_Ny() - 0.25*bscore4 << ")\n\n";
+	}
+	else { // draw
+		cout << "draw!\n\n";
+	}
+	tree.writeSGF("test.sgf");
+
+	getchar();
+	getchar();
+}
+
+// run this for stand alone human vs computer
+void human_vs_human_ui()
+{
+	Int Nx, Ny, ret, i = 0, bscore4, x, y;
+	Doub komi;
+	Char color;
+	cout << "human vs computer..." << endl;
+	cout << "input board size x : "; cin >> Nx;
+	cout << "input board size y : "; cin >> Ny;
+	cout << "input komi : "; cin >> komi;
+
+	board_Nx(Nx); board_Ny(Ny); // set board size
+	komi2(round(komi * 2)); // set koomi
+	Tree tree;
+
+	i = 0;
+	cout << "\n\nstep " << i << " "; ++i;
+	tree.disp_board();
+
+	for (; i < 10000; ++i) {
+		// human move
+		cout << "input x y (negative to pass): ";
+		cin >> x >> y;
+		if (x < 0 || y < 0) {
+			if (tree.pass()) // pass !
+				break; // double pass !
+		}
+		if (tree.place(x, y)) {
+			error("illegal move!");
+		}
+		cout << "step " << i << " ";
+		tree.disp_board();
+	}
+
+	cout << "game over!" << "\n\n";
+	bscore4 = tree.bscore4();
+
+	if (winner(bscore4) == BLACK) {
+		cout << "black wins!";
+		cout << "  (score: " << 0.25*bscore4 << ")\n\n";
+	}
+	else if (winner(bscore4) == WHITE) {
+		cout << "white wins!";
+		cout << "  (score: " << board_Nx()*board_Ny() - 0.25*bscore4 << ")\n\n";
+	}
+	else { // draw
+		cout << "draw!\n\n";
+	}
+	tree.writeSGF("test.sgf");
+
+	getchar();
+	getchar();
+}
+
+int main()
+{
+	// computer_vs_computer_ui();
+	// human_vs_computer_ui();
+	// human_vs_human_ui();
 }
