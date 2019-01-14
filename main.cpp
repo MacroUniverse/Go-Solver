@@ -215,8 +215,8 @@ public:
 
 	// TODO: can these be non member ?
 	static MatChar m_mark; // 0: unmarked, 1: marked, else: not used yet
-	static vector<Move> group; // a group of connected stones
-	static Int qi; // qi of group
+	static vector<Move> m_group; // a group of connected stones
+	static Int m_qi; // qi of group
 
 	Board() {}
 
@@ -228,12 +228,14 @@ public:
 
 	inline void disp() const; // display board on screen
 
+	inline Int check(Char_I x, Char_I y, Who_I s) const;
+
 	inline Int place(Char_I x, Char_I y, Who_I s); // place stone
 
 	inline void connect_init() const; // use before "connect()"
 
 	// get stones connected to a given stone (fill "m_group") and calculate qi
-	inline void connect(Char_I x, Char_I y) const;
+	inline void connect(Char_I x, Char_I y, Who_I who = UNKNOWN) const;
 
 	// remove group if it is dead after placing (x,y)
 	inline void remove_group();
@@ -242,8 +244,12 @@ public:
 
 	inline Bool is_eye(Char_I x, Char_I y, Who_I who) const;
 
-	// check if the 
+	// check filling of an eye that's not in danger
 	inline Bool is_dumb_eye_filling(Char_I x, Char_I y, Who_I who) const;
+
+	// filling big eye surrounded by connected stones
+	// ignore the internal_use argument when using
+	inline Bool is_dumb_2eye_filling(Char_I x, Char_I y, Who_I who, Bool_I internal_use = false) const;
 
 	~Board() {}
 };
@@ -285,6 +291,64 @@ inline void Board::disp() const
 	}
 }
 
+// check if a placing is legal, or how many stones will be dead
+// same check already exists for place()
+// Ko is not considered!
+// if legal, return the number of stones that can be removed ( >= 0)
+// return -1 if occupied, do nothing
+// return -2 if no qi, do nothing
+inline Int Board::check(Char_I x, Char_I y, Who_I who) const
+{
+#ifdef _CHECK_BOUND_
+	if (x < 0 || y < 0 || x >= board_Nx() || y >= board_Ny())
+		error("Tree::place(x,y): out of bound!");
+#endif
+	Int Nx = board_Nx(), Ny = board_Ny(), Nremove = 0;
+	// check if already occupied
+	if (m_data(x, y) != NONE)
+		return -1;
+
+	// search opponent's dead stones
+	// only necessary if placed next to opposite stone
+	connect_init();
+	if (x > 0 && m_data(x - 1, y) == next(who)) {
+		connect(x - 1, y);
+		if (m_qi == 1)
+			Nremove += m_group.size();
+	}
+
+	if (y > 0 && m_data(x, y - 1) == next(who) && !m_mark(x, y - 1)) {
+		connect_init();
+		connect(x, y - 1);
+		if (m_qi == 1)
+			Nremove += m_group.size();
+	}
+
+	if (x < Nx - 1 && m_data(x + 1, y) == next(who) && !m_mark(x + 1, y)) {
+		connect_init();
+		connect(x + 1, y);
+		if (m_qi == 1)
+			Nremove += m_group.size();
+	}
+
+	if (y < Ny - 1 && m_data(x, y + 1) == next(who) && !m_mark(x, y + 1)) {
+		connect_init();
+		connect(x, y + 1);
+		if (m_qi == 1)
+			Nremove += m_group.size();
+	}
+
+	if (Nremove > 0)
+		return Nremove;
+
+	// check qi assuming stone is placed
+	connect_init();
+	connect(x, y, who);
+	if (m_qi == 0) return -2;
+
+	return 0;
+}
+
 // return 0 if legal, and update board
 // Ko is not considered! 
 // return -1 if occupied, do nothing
@@ -296,6 +360,7 @@ inline Int Board::place(Char_I x, Char_I y, Who_I who)
 		error("Tree::place(x,y): out of bound!");
 #endif
 	Int Nx = board_Nx(), Ny = board_Ny();
+	Bool removed = false;
 	// check if already occupied
 	if (m_data(x,y) != NONE)
 		return -1;
@@ -308,31 +373,41 @@ inline Int Board::place(Char_I x, Char_I y, Who_I who)
 	connect_init();
 	if (x > 0 && m_data(x - 1, y) == next(who)) {
 		connect(x - 1, y);
-		if (qi == 0) remove_group();
+		if (m_qi == 0) {
+			remove_group(); removed = true;
+		}
 	}
 
 	if (y > 0 && m_data(x, y - 1) == next(who) && !m_mark(x, y - 1)) {
 		connect_init();
 		connect(x, y - 1);
-		if (qi == 0) remove_group();
+		if (m_qi == 0) {
+			remove_group(); removed = true;
+		}
 	}
 
 	if (x < Nx - 1 && m_data(x + 1, y) == next(who) && !m_mark(x + 1, y)) {
 		connect_init();
 		connect(x + 1, y);
-		if (qi == 0) remove_group();
+		if (m_qi == 0) {
+			remove_group(); removed = true;
+		}
 	}
 
 	if (y < Ny - 1 && m_data(x, y + 1) == next(who) && !m_mark(x, y + 1)) {
 		connect_init();
 		connect(x, y + 1);
-		if (qi == 0) remove_group();
+		if (m_qi == 0) {
+			remove_group(); removed = true;
+		}
 	}
+
+	if (removed) return 0;
 
 	// check qi of placed stone
 	connect_init();
 	connect(x, y);
-	if (qi == 0) return -2;
+	if (m_qi == 0) return -2;
 
 	return 0;
 }
@@ -340,16 +415,25 @@ inline Int Board::place(Char_I x, Char_I y, Who_I who)
 inline void Board::connect_init() const
 {
 	m_mark = 0;
-	group.resize(0);
-	qi = 0;
+	m_group.resize(0);
+	m_qi = 0;
 }
 
 // get a group of stones with the same color that are connected to stone (x,y)
-inline void Board::connect(Char_I x, Char_I y) const
+// if (x, y) does not have a stone yet, specifying "who" can assume a stone is placed
+inline void Board::connect(Char_I x, Char_I y, Who_I who /*optional*/) const
 {
 	Char Nx = board_Nx(), Ny = board_Ny();
-	Who s, s0 = m_data(x, y);
-	group.push_back(Move(x, y));
+	Who s, s0;
+	if (m_data(x, y) == NONE) {
+		if (who == UNKNOWN)
+			error("must input who!");
+		else
+			s0 = who;
+	}
+	else
+		s0 = m_data(x, y);
+	m_group.push_back(Move(x, y));
 	m_mark(x, y) = 1;
 
 	if (x > 0) {
@@ -358,7 +442,7 @@ inline void Board::connect(Char_I x, Char_I y) const
 		if (s == s0 && !mark)
 			connect(x - 1, y);
 		else if (s == NONE && !mark) {
-			++qi; mark = 1;
+			++m_qi; mark = 1;
 		}
 	}
 
@@ -368,7 +452,7 @@ inline void Board::connect(Char_I x, Char_I y) const
 		if (s == s0 && !mark)
 			connect(x + 1, y);
 		else if (s == NONE && !mark) {
-			++qi; mark = 1;
+			++m_qi; mark = 1;
 		}
 	}
 
@@ -378,7 +462,7 @@ inline void Board::connect(Char_I x, Char_I y) const
 		if (s == s0 && !mark)
 			connect(x, y - 1);
 		else if (s == NONE && !mark) {
-			++qi; mark = 1;
+			++m_qi; mark = 1;
 		}
 	}
 
@@ -388,7 +472,7 @@ inline void Board::connect(Char_I x, Char_I y) const
 		if (s == s0 && !mark)
 			connect(x, y + 1);
 		else if (s == NONE && !mark) {
-			++qi; mark = 1;
+			++m_qi; mark = 1;
 		}
 	}
 }
@@ -396,8 +480,8 @@ inline void Board::connect(Char_I x, Char_I y) const
 inline void Board::remove_group()
 {
 	Int i;
-	for (i = 0; i < group.size(); ++i)
-		m_data(group[i].x(), group[i].y()) = NONE;
+	for (i = 0; i < m_group.size(); ++i)
+		m_data(m_group[i].x(), m_group[i].y()) = NONE;
 }
 
 // this will be accurate when no legal move exists
@@ -464,28 +548,133 @@ inline Bool Board::is_dumb_eye_filling(Char_I x, Char_I y, Who_I who) const
 	connect_init();
 	if (x > 0) {
 		connect(x - 1, y);
-		if (qi == 1) return false;
+		if (m_qi == 1) return false;
 	}
 
 	if (y > 0 && !m_mark(x, y - 1)) {
 		connect_init();
 		connect(x, y - 1);
-		if (qi == 1) return false;
+		if (m_qi == 1) return false;
 	}
 
 	if (x < Nx - 1 && !m_mark(x + 1, y)) {
 		connect_init();
 		connect(x + 1, y);
-		if (qi == 1) return false;
+		if (m_qi == 1) return false;
 	}
 
 	if (y < Ny - 1 && !m_mark(x, y + 1)) {
 		connect_init();
 		connect(x, y + 1);
-		if (qi == 1) return false;
+		if (m_qi == 1) return false;
 	}
 
 	// it is dumb...
+	return true;
+}
+
+inline Bool Board::is_dumb_2eye_filling(Char_I x, Char_I y, Who_I who, Bool_I other_qi_checked) const
+{
+	Int Nx = board_Nx(), Ny = board_Ny();
+	Int black;
+	Char x1, y1, x_qi, y_qi;
+	Bool qi = false, connected = false;
+
+	// check qi of sourrounding 3 stones and one qi
+
+	// check left
+	x1 = x - 1; y1 = y;
+	if (x > 0) {
+		if (m_data(x1, y1) == who) {
+			if (connected) {
+				if (!m_mark(x1, y1)) return false; // black not connected
+			}
+			else {
+				connect_init();
+				connect(x1, y1);
+				connected = true;
+			}
+		}
+		else if (m_data(x1, y1) == NONE) {
+			if (qi) return false; // more than one qi
+			qi = true; x_qi = x1; y_qi = y1;
+		}
+		else
+			return false; // found white stone
+	}
+
+	// check right
+	x1 = x + 1; y1 = y;
+	if (x < Nx - 1) {
+		if (m_data(x1, y1) == who) {
+			if (connected) {
+				if (!m_mark(x1, y1)) return false; // black not connected
+			}
+			else {
+				connect_init();
+				connect(x1, y1);
+				connected = true;
+			}
+		}
+		else if (m_data(x1, y1) == NONE) {
+			if (qi) return false; // more than one qi
+			qi = true; x_qi = x1; y_qi = y1;
+		}
+		else
+			return false; // found white stone
+	}
+
+	// check up
+	x1 = x; y1 = y - 1;
+	if (y > 0) {
+		if (m_data(x1, y1) == who) {
+			if (connected) {
+				if (!m_mark(x1, y1)) return false; // black not connected
+			}
+			else {
+				connect_init();
+				connect(x1, y1);
+				connected = true;
+			}
+		}
+		else if (m_data(x1, y1) == NONE) {
+			if (qi) return false; // more than one qi
+			qi = true; x_qi = x1; y_qi = y1;
+		}
+		else
+			return false; // found white stone
+	}
+
+	// check down
+	x1 = x; y1 = y + 1;
+	if (y < Ny - 1) {
+		if (m_data(x1, y1) == who) {
+			if (connected) {
+				if (!m_mark(x1, y1)) return false; // black not connected
+			}
+			else {
+				connect_init();
+				connect(x1, y1);
+				connected = true;
+			}
+		}
+		else if (m_data(x1, y1) == NONE) {
+			if (qi) return false; // more than one qi
+			qi = true; x_qi = x1; y_qi = y1;
+		}
+		else
+			return false; // found white stone
+	}
+	
+	// check the other qi
+	if (!other_qi_checked) {
+		if(!is_dumb_2eye_filling(x_qi, y_qi, who, true))
+			return false;
+		// count empty corners of surrounding rectangle
+		TODO! this is complicated...
+	}
+
+	// ok, it is dumb...
 	return true;
 }
 
@@ -575,6 +764,8 @@ public:
 
 	inline Int pass(Long_I treeInd = -1);
 
+	inline Int check(Char_I x, Char_I y, Long_I treeInd = -1);
+
 	inline Int place(Char_I x, Char_I y, Long_I treeInd = -1);
 
 	inline Int islinked(Long_I treeInd1, Long_I treeInd2); // check if node treeInd1 can lead to node treeInd2
@@ -594,7 +785,7 @@ public:
 
 	// smarter random move for a node
 	// will not fill single eye unless it could be destroyed immediately, or if all other moves already exists
-	inline Int rand_move1(Long_I treeInd = -1);
+	inline Int rand_smart_move(Long_I treeInd = -1);
 
 	// randomly play to the end of the game from a node (default: from top node)
 	inline Int rand_game(Long_I treeInd = 0, Bool_I out = false);
@@ -669,6 +860,27 @@ inline Int Tree::pass(Long_I treeInd /*optional*/)
 	}
 	if(treeInd < 0) ++m_treeInd;
 	return 0;
+}
+
+// check if a placing is legal, or how many stones will be dead
+// same check already exists for place()
+// Ko is not considered!
+// if legal, return the number of stones that can be removed ( >= 0)
+// return -1 if occupied, do nothing
+// return -2 if no qi, do nothing
+inline Int Tree::check(Char_I x, Char_I y, Long_I treeInd /*optional*/)
+{
+	Int ret;
+	const Long treeInd1 = (treeInd < 0) ? m_treeInd : treeInd;
+	Node node;
+	Board board;
+	board = get_board();
+	// first move
+	if (treeInd1 == 0)
+		return 0;
+
+	// update board and check illegal move (Ko no checked!)
+	return board.check(x, y, next(who()));
 }
 
 // return 0 if new node created (m_treeInd++)
@@ -856,14 +1068,15 @@ Int Tree::rand_move(Long_I treeInd /*optional*/)
 // return -1 if there is all legal moves already exists
 // return -2 if double pass caused end of game
 // return 1 if successful but dumb
-Int Tree::rand_move1(Long_I treeInd /*optional*/)
+Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 {
 	Bool exist, exist_pass = false;
 	Int i, j, ret, Nx = board_Nx(), Ny = board_Ny(), Nxy = Nx*Ny;
 	Char x0, y0, x, y;
 	VecInt xy;
 	vector<Int> dumb_xy;
-	Node & node = treeInd < 0 ? m_nodes[m_treeInd] : m_nodes[treeInd];
+	Long_I treeInd1 = treeInd < 0 ? m_treeInd : treeInd;
+	Node & node = m_nodes[treeInd1];
 
 	// random sequence of all grid points on board
 	randPerm(xy, Nxy);
@@ -874,8 +1087,16 @@ Int Tree::rand_move1(Long_I treeInd /*optional*/)
 		// check existence
 		if (next_exist(Move(x, y)))
 			continue;
+		// check legal and number of removal
+		ret = check(x, y, treeInd1);
+		if (ret < 0)
+			continue;
 		// check dumb eye filling
 		if (get_board().is_dumb_eye_filling(x, y, next(who()))) {
+			dumb_xy.push_back(i);
+			continue;
+		}
+		if (get_board().is_dumb_2eye_filling(x, y, next(who()))) {
 			dumb_xy.push_back(i);
 			continue;
 		}
@@ -909,7 +1130,6 @@ Int Tree::rand_move1(Long_I treeInd /*optional*/)
 inline Int Tree::rand_game(Long_I treeInd, Bool_I out)
 {
 	Int i, ret;
-	Tree tree;
 	Doub bscore4;
 
 	m_treeInd = treeInd;
@@ -922,10 +1142,10 @@ inline Int Tree::rand_game(Long_I treeInd, Bool_I out)
 	tree.pass();*/
 	// end edit board
 
-	// tree.disp_board();
+	if (out) disp_board();
 
 	for (i = 1; i < 10000; ++i) {
-		ret = tree.rand_move1();
+		ret = rand_smart_move();
 		if (ret == -1) {
 			if (out) cout << "all moves exists\n\n\n";
 			break;
@@ -935,11 +1155,11 @@ inline Int Tree::rand_game(Long_I treeInd, Bool_I out)
 			break;
 		}
 		if (out) cout << "step " << i << endl;
-		if (out) tree.disp_board();
+		if (out) disp_board();
 	}
 	
 	if (out) cout << "game over!" << "\n\n";
-	bscore4 = tree.bscore4();
+	bscore4 = this->bscore4();
 	
 	if (winner(bscore4) == BLACK) {
 		m_nodes[m_treeInd].m_win = BLACK;
@@ -955,7 +1175,9 @@ inline Int Tree::rand_game(Long_I treeInd, Bool_I out)
 		m_nodes[m_treeInd].m_win = DRAW;
 		if (out) cout << "draw!\n\n";
 	}
-	if (out) tree.writeSGF("test.sgf");
+	if (out) writeSGF("test.sgf");
+
+	return 0;
 }
 
 // might m_treeInd be changed? it shouldn't
@@ -990,7 +1212,7 @@ void Tree::solve(Long_I treeInd /*optional*/)
 		// return -1 if there is all legal moves already exists
 		// return -2 if double pass caused end of game
 		// return 1 if successful but dumb
-		ret = rand_move1();
+		ret = rand_smart_move();
 		if (ret == 0) {
 			solve(m_nodes[m_treeInd].next(0));
 		}
@@ -1020,24 +1242,22 @@ void Tree::solve(Long_I treeInd /*optional*/)
 
 // initialize class static members
 MatChar Board::m_mark; // 0: unmarked, 1: marked, else: not used yet
-vector<Move> Board::group; // a group of connected stones
-Int Board::qi; // qi of group
+vector<Move> Board::m_group; // a group of connected stones
+Int Board::m_qi; // qi of group
 
 int main()
 {
-	Int i, ret;
 	board_Nx(9); board_Ny(9); // set board size
-	komi2(13); // set koomi
+	komi2(18); // set koomi
 	Tree tree;
-	Doub bscore4;
 	
 	// edit board here
-	/*tree.place(0, 0); tree.place(1, 2);
-	tree.place(2, 2); tree.place(1, 1);
-	tree.place(0, 2); tree.place(0, 1);
-	tree.place(2, 1); tree.place(1, 0);
-	tree.pass();*/
+	/*tree.place(0, 1); tree.place(1, 0);
+	tree.place(0, 2); tree.place(2, 0);
+	tree.place(1, 1); tree.place(2, 1);
+	tree.place(1, 2); tree.pass();
+	tree.place(2, 2);*/
 	// end edit board
 
-	tree.rand_game(0, false);
+	tree.rand_game(0, true);
 }
