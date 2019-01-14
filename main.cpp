@@ -21,6 +21,8 @@ enum Who { NONE, BLACK, WHITE, UNKNOWN, DRAW }; // TODO: make this a char type
 
 enum Act { PLACE, PASS, EDIT, INIT }; // TODO: make this a char type
 
+enum Sol { BAD, FAIR, GOOD, UNCLEAR };
+
 typedef const Who Who_I;
 
 // inverse color
@@ -173,9 +175,9 @@ private:
 	vector<Long> m_next; // -1: end node
 	Long m_poolInd; // pool index, board stored in Pool::m_board[m_pool_ind]
 public:
-	Who m_win; // if two gods playing, who will win?
+	Sol m_sol; // if two gods playing, who will win?
 
-	Node(): m_win(UNKNOWN) {}
+	Node(): m_sol(UNCLEAR) {}
 	
 	// properties
 	using Move::isplace;
@@ -760,28 +762,41 @@ inline void Pool::push(const Board &board, Int_I search_ret, Long_I orderInd, Lo
 // TODO: treeInd = 0 should be the empty board!
 class Tree
 {
-public:
+private:
 	Long m_treeInd; // index of the current step (already played) in m_data (init: -1)
 	vector<Node> m_nodes;
 	Pool m_pool;
 
+public:
 	Tree();
 
 	// peoperties
 	const Board & get_board(Long_I treeInd = -1) const // reference to the Board obj of a node
 	{
-		Long treeInd1 = (treeInd < 0) ? m_treeInd : treeInd;
+		Long treeInd1 = def(treeInd);
 		Long poolInd = m_nodes[treeInd1].poolInd();
 		return m_pool.m_boards[poolInd];
 	}
 
+	Long index() const { return m_treeInd; } // return current node index
+
+	Long nnode() const { return m_nodes.size(); } // return number of nodes in the tree
+
+	inline Node & node(Long_I treeInd = -1) // return a reference of a node
+	{ return m_nodes[def(treeInd)]; }
+
 	inline Long last(Long_I treeInd = -1, Int_I forkInd = 0) const; // return an index of the last node of a node
 
-	Node & lastNode(Long_I treeInd = -1, Int_I forkInd = 0) // return a reference of the last node of a node
+	const Node & lastNode(Long_I treeInd = -1, Int_I forkInd = 0) // return a reference of the last node of a node
 	{ return m_nodes[last(treeInd, forkInd)]; }
 
+	inline Long next(Long_I treeInd = -1, Int_I forkInd = 0) const; // return an index of the next node of a node
+
+	const Node & nextNode(Long_I treeInd = -1, Int_I forkInd = 0) // return a reference of the next node of a node
+	{ return m_nodes[next(treeInd, forkInd)]; }
+
 	Who who(Long_I treeInd = -1) // who played the current step
-	{ return m_nodes[treeInd < 0 ? m_treeInd : treeInd ].who(); }
+	{ return m_nodes[def(treeInd)].who(); }
 
 	inline void disp_board(Long_I treeInd = -1); // display board
 
@@ -815,11 +830,18 @@ public:
 
 	inline void solve(Long_I treeInd = -1); // analyse who has winning strategy for a node
 
+	Sol & solution(Long_I treeInd = -1)
+	{ return node(def(treeInd)).m_sol; }
+
 	inline Int bscore4(Long_I treeInd = -1) const // black score times 4
-	{ return get_board(treeInd < 0? m_treeInd : treeInd).bscore4(); }
+	{ return get_board(def(treeInd)).bscore4(); }
 
 	inline Int wscore4(Long_I treeInd = -1) const // white score times 4
 	{ return 4*board_Nx()*board_Ny() - bscore4(); }
+
+	// set default argument treeInd
+	Long def(Long_I treeInd) const
+	{ return treeInd < 0 ? m_treeInd : treeInd; }
 
 	~Tree() {}
 };
@@ -835,15 +857,20 @@ Tree::Tree() : m_treeInd(0)
 
 inline Long Tree::last(Long_I treeInd /*optional*/, Int_I forkInd /*optional*/) const
 {
-	const Node &node = (treeInd < 0) ? m_nodes[m_treeInd] : m_nodes[treeInd];
+	const Node &node = m_nodes[def(treeInd)];
 	return node.last(forkInd);
 }
 
+inline Long Tree::next(Long_I treeInd /*optional*/, Int_I forkInd /*optional*/) const
+{
+	const Node &node = m_nodes[def(treeInd)];
+	return node.next(forkInd);
+}
 
 inline void Tree::disp_board(Long_I treeInd /*optional*/)
 {
 	Char x, y;
-	Long treeInd1 = treeInd < 0 ? m_treeInd : treeInd;
+	Long treeInd1 = def(treeInd);
 	Node & node = m_nodes[treeInd1];
 	if (node.isinit())
 		cout << "(empty)";
@@ -872,8 +899,8 @@ inline void Tree::disp_board(Long_I treeInd /*optional*/)
 inline Int Tree::pass(Long_I treeInd /*optional*/)
 {
 	Node node;
-	const Long treeInd1 = (treeInd < 0) ? m_treeInd : treeInd;
-	node.pass(next(who()), treeInd1, m_nodes[treeInd1].poolInd());
+	const Long treeInd1 = def(treeInd);
+	node.pass(::next(who()), treeInd1, m_nodes[treeInd1].poolInd());
 	m_nodes.push_back(node);
 	// check double pass (game ends)
 	if (m_nodes[treeInd1].ispass()) {
@@ -894,7 +921,7 @@ inline Int Tree::pass(Long_I treeInd /*optional*/)
 inline Int Tree::check(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 {
 	Int ret;
-	const Long treeInd1 = (treeInd < 0) ? m_treeInd : treeInd;
+	const Long treeInd1 = def(treeInd);
 	Node node;
 	Board board;
 	board = get_board();
@@ -903,7 +930,7 @@ inline Int Tree::check(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 		return 0;
 
 	// update board and check illegal move (Ko no checked!)
-	return board.check(x, y, next(who()));
+	return board.check(x, y, ::next(who()));
 }
 
 // return 0 if new node created (m_treeInd++)
@@ -914,7 +941,7 @@ inline Int Tree::check(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 {
 	Int ret;
-	const Long treeInd1 = (treeInd < 0) ? m_treeInd : treeInd;
+	const Long treeInd1 = def(treeInd);
 	Node node;
 	Board board;
 	board = get_board();
@@ -929,7 +956,7 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 	}
 
 	// update board and check illegal move (Ko no checked!)
-	if (board.place(x, y, next(who())))
+	if (board.place(x, y, ::next(who())))
 		return -1;
 
 	// check Ko
@@ -952,7 +979,7 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 	// board is new
 	// push board to pool
 	m_pool.push(board, search_ret, orderInd, treeInd1+1);
-	node.place(x, y, next(who()), treeInd1, m_pool.size()-1);
+	node.place(x, y, ::next(who()), treeInd1, m_pool.size()-1);
 
 	// add Node to tree
 	node.push_next(treeInd1 + 1);
@@ -1001,7 +1028,7 @@ inline Int Tree::check_ko(Int_O &search_ret, Long_O &treeInd1, Long_O &orderInd,
 inline void Tree::branch(vector<Long> &br, Long_I treeInd /*optional*/)
 {
 	Int i, Nbr;
-	Long treeInd1 = treeInd < 0 ? m_treeInd : treeInd;
+	Long treeInd1 = def(treeInd);
 	br.resize(0);
 	for (i = 0; i < 10000; ++i) {
 		if (treeInd1 == 0) break;
@@ -1051,7 +1078,7 @@ inline void Tree::writeSGF(const string &name)
 inline Bool Tree::next_exist(Move mov, Long_I treeInd /*optional*/)
 {
 	Int i;
-	Node &node = treeInd < 0 ? m_nodes[m_treeInd] : m_nodes[treeInd];
+	Node &node = m_nodes[def(treeInd)];
 	for (i = 0; i < node.nnext(); ++i)
 		if (m_nodes[node.next(i)].move() == mov)
 			return true;
@@ -1063,28 +1090,7 @@ inline Bool Tree::next_exist(Move mov, Long_I treeInd /*optional*/)
 // return -2 if double pass caused end of game
 Int Tree::rand_move(Long_I treeInd /*optional*/)
 {
-	Bool exist, exist_pass = false;
-	Int i, j, ret, Nx = board_Nx(), Ny = board_Ny(), Nxy = Nx*Ny;
-	Char x0, y0, x, y;
-	VecInt xy;
-	Node & node = treeInd < 0 ? m_nodes[m_treeInd] : m_nodes[treeInd];
-
-	// random sequence of all grid points on board
-	randPerm(xy, Nxy);
-
-	// search xy for a new legal move (not in Node::m_next)
-	for (i = 0; i < Nxy; ++i) {		
-		x = xy[i] % Nx; y = xy[i] / Nx;
-		// check existence
-		if (next_exist(Move(x, y))) continue;
-		if (place(x, y) < 0) continue;
-		else return 0;
-	}
-
-	// no legal move exists, consider passing
-	if (next_exist(Move(PASS))) return -1;
-	if (pass()) return -2; // double pass
-	else return 0; // first pass
+	error("update this function from rand_smart_move()");
 }
 
 // return 0 if successful
@@ -1098,7 +1104,7 @@ Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 	Char x0, y0, x, y;
 	VecInt xy;
 	vector<Int> dumb_xy;
-	Long_I treeInd1 = treeInd < 0 ? m_treeInd : treeInd;
+	Long_I treeInd1 = def(treeInd);
 	Node & node = m_nodes[treeInd1];
 
 	// random sequence of all grid points on board
@@ -1115,11 +1121,11 @@ Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 		if (ret < 0)
 			continue;
 		// check dumb eye filling
-		if (get_board().is_dumb_eye_filling(x, y, next(who()))) {
+		if (get_board().is_dumb_eye_filling(x, y, ::next(who()))) {
 			dumb_xy.push_back(i);
 			continue;
 		}
-		if (get_board().is_dumb_2eye_filling(x, y, next(who()))) {
+		if (get_board().is_dumb_2eye_filling(x, y, ::next(who()))) {
 			dumb_xy.push_back(i);
 			continue;
 		}
@@ -1140,7 +1146,7 @@ Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 	for (i = 0; i < Nxy; ++i) {
 		x = xy[i] % Nx; y = xy[i] / Nx;
 		if (place(x, y) < 0) continue;
-		else return 0;
+		else return 1;
 	}
 
 	return -1; // all leagl moves already exist
@@ -1185,45 +1191,65 @@ inline Int Tree::rand_game(Long_I treeInd, Bool_I out)
 	bscore4 = this->bscore4();
 	
 	if (winner(bscore4) == BLACK) {
-		m_nodes[m_treeInd].m_win = BLACK;
+		solution() = BLACK;
 		if (out) cout << "black wins!";
 		if (out) cout << "  (score: " << 0.25*bscore4 << ")\n\n";
 	}
 	else if (winner(bscore4) == WHITE) {
-		m_nodes[m_treeInd].m_win = WHITE;
+		solution() = WHITE;
 		if (out) cout << "white wins!";
 		if (out) cout << "  (score: " << board_Nx()*board_Ny() - 0.25*bscore4 << ")\n\n";
 	}
 	else { // draw
-		m_nodes[m_treeInd].m_win = DRAW;
+		solution() = DRAW;
 		if (out) cout << "draw!\n\n";
 	}
-	if (out) writeSGF("test.sgf");
+	if (out) writeSGF("randdom_game.sgf");
 
 	return 0;
 }
 
 // might m_treeInd be changed? it shouldn't
-// use as a recursive function for now (stack might overflow)
+// this is a recursive function
+// using rand_smart_move() to generate moves until a better one is available
+// assuming there is no branch after treeInd for now
+// TODO: what if rand_smart_move() gets a ko???
 void Tree::solve(Long_I treeInd /*optional*/)
 {
 	Int i, ret;
+	Sol best;
+	
 	if (treeInd >= 0) m_treeInd = treeInd;
 
-	// get a branch from treeInd to the bottom
-	// (the smarter the moves are, the easier it can be solved)
-	// (the shorter it is, the easier it can be solved)
-	// use rand_game() for now
-	
-	rand_game(m_treeInd);
+	// enumerate every child
+	for (i = 0; i < 1000; ++i) {
+		ret = rand_smart_move();
+		// legal
+		if (ret == 0 || ret == 1) {
+			solve();
+			if (solution() > best)
+				best = solution();
+			if (best == GOOD)
+				solution() = BAD; return;
+		}
+		// all legal moves already exists
+		if (ret == -1) {
+			break;
+		}
+		// double pass caused end of game
+		if (ret == -2) {
+			// this child is already solved by game result
+			continue;
+		}
+	}
 
-	// better to solve it's wave down recursively
-	// assuming there is the only branch after m_treeInd for now
+	// all legal moves already exists
+	// TODO
 
-	// try to solve the only existing child first
+	// =========== scratch ================
 	// rule No.1
-	if (m_nodes[m_nodes[m_treeInd].next(0)].m_win == next(who())) {
-		m_nodes[m_treeInd].m_win = next(who()); return; // solved
+	if (nextNode(0).m_sol == GOOD) {
+		node().m_sol = BAD; return; // solved
 	}
 	else {
 		solve(m_nodes[m_treeInd].next(0)); // solve the only existing child
@@ -1257,7 +1283,7 @@ void Tree::solve(Long_I treeInd /*optional*/)
 	}
 
 
-	if (who() == m_nodes[m_treeInd].m_win) {
+	if (who() == m_nodes[m_treeInd].m_sol) {
 		m_treeInd = m_nodes[m_treeInd].last(0);
 	}
 	//
@@ -1377,7 +1403,7 @@ void human_vs_computer_ui()
 	else { // draw
 		cout << "draw!\n\n";
 	}
-	tree.writeSGF("test.sgf");
+	tree.writeSGF("record.sgf");
 
 	getchar();
 	getchar();
@@ -1431,7 +1457,7 @@ void human_vs_human_ui()
 	else { // draw
 		cout << "draw!\n\n";
 	}
-	tree.writeSGF("test.sgf");
+	tree.writeSGF("record.sgf");
 
 	getchar();
 	getchar();
