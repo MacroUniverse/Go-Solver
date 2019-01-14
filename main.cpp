@@ -248,8 +248,7 @@ public:
 	inline Bool is_dumb_eye_filling(Char_I x, Char_I y, Who_I who) const;
 
 	// filling big eye surrounded by connected stones
-	// ignore the internal_use argument when using
-	inline Bool is_dumb_2eye_filling(Char_I x, Char_I y, Who_I who, Bool_I internal_use = false) const;
+	inline Bool is_dumb_2eye_filling(Char_I x, Char_I y, Who_I who) const;
 
 	~Board() {}
 };
@@ -573,7 +572,7 @@ inline Bool Board::is_dumb_eye_filling(Char_I x, Char_I y, Who_I who) const
 	return true;
 }
 
-inline Bool Board::is_dumb_2eye_filling(Char_I x, Char_I y, Who_I who, Bool_I other_qi_checked) const
+inline Bool Board::is_dumb_2eye_filling(Char_I x, Char_I y, Who_I who) const
 {
 	Int Nx = board_Nx(), Ny = board_Ny();
 	Int black;
@@ -667,11 +666,33 @@ inline Bool Board::is_dumb_2eye_filling(Char_I x, Char_I y, Who_I who, Bool_I ot
 	}
 	
 	// check the other qi
-	if (!other_qi_checked) {
-		if(!is_dumb_2eye_filling(x_qi, y_qi, who, true))
+
+	// left
+	x1 = x_qi - 1; y1 = y_qi;
+	if (x_qi > 0 && !(x1 == x && y1 == y)) {
+		if (!(m_data(x1, y1) == who && m_mark(x1, y1)))
 			return false;
-		// count empty corners of surrounding rectangle
-		TODO! this is complicated...
+	}
+
+	// right
+	x1 = x_qi + 1; y1 = y_qi;
+	if (x_qi < Nx - 1 && !(x1 == x && y1 == y)) {
+		if (!(m_data(x1, y1) == who && m_mark(x1, y1)))
+			return false;
+	}
+
+	// up
+	x1 = x_qi; y1 = y_qi - 1;
+	if (y_qi > 0 && !(x1 == x && y1 == y)) {
+		if (!(m_data(x1, y1) == who && m_mark(x1, y1)))
+			return false;
+	}
+
+	// down
+	x1 = x_qi; y1 = y_qi + 1;
+	if (y_qi < Ny - 1 && !(x1 == x && y1 == y)) {
+		if (!(m_data(x1, y1) == who && m_mark(x1, y1)))
+			return false;
 	}
 
 	// ok, it is dumb...
