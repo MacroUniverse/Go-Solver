@@ -21,7 +21,7 @@ enum Who { NONE, BLACK, WHITE, UNKNOWN, DRAW }; // TODO: make this a char type
 
 enum Act { PLACE, PASS, EDIT, INIT }; // TODO: make this a char type
 
-enum Sol { BAD, FAIR, GOOD, UNCLEAR };
+enum Sol { BAD, FAIR, GOOD, UNCLEAR, KO_ONLY };
 
 typedef const Who Who_I;
 
@@ -187,9 +187,12 @@ private:
 	vector<Long> m_next; // -1: end node
 	Long m_poolInd; // pool index, board stored in Pool::m_board[m_pool_ind]
 public:
+	// solution related
 	Sol m_sol; // if two gods playing, who will win?
+	Sol m_best_child_sol; // solution of the best child that are already solved
+	Bool m_all_child_exist; // all legal children exist in the tree
 
-	Node(): m_sol(UNCLEAR) {}
+	Node(): m_sol(UNCLEAR), m_best_child_sol(BAD), m_all_child_exist(false) {}
 	
 	// properties
 	using Move::isplace;
@@ -205,7 +208,7 @@ public:
 	Int nlast() const { return m_last.size(); }
 	Long last(Int_I ind) const { return m_last[ind]; }
 	Int nnext() const { return m_next.size(); }
-	Long next(Int_I ind) const { return m_next[ind]; }
+	inline Long next(Int_I ind) const;
 
 	// set
 	void init(Long_I poolInd) { Move::init(); m_last.resize(0); m_who = NONE; m_poolInd = poolInd; }
@@ -220,6 +223,15 @@ public:
 
 	~Node() {}
 };
+
+// ind = -1 : last element, ind = -2 : second last element, etc.
+Long Node::next(Int_I ind) const
+{
+	if (ind < 0)
+		return m_next[nnext() + ind];
+	else
+		return m_next[ind];
+}
 
 // status of the board
 // TODO: implement operator << for move
@@ -782,6 +794,10 @@ private:
 public:
 	Tree();
 
+	// global work space, should not be a member
+	vector<Long> m_ko_treeInds; // keep track of all the destinations of Ko links
+	Sol m_ko_best; // best descendent solution except ko
+
 	// peoperties
 	const Board & get_board(Long_I treeInd = -1) const // reference to the Board obj of a node
 	{
@@ -847,7 +863,7 @@ public:
 
 	inline void solve_end(Long_I treeInd = -1); // solve a bottom node
 
-	inline void solve(Long_I treeInd = -1); // analyse who has winning strategy for a node
+	inline Int solve(Long_I treeInd = -1); // analyse who has winning strategy for a node
 
 	Sol & solution(Long_I treeInd = -1)
 	{ return node(def(treeInd)).m_sol; }
@@ -1119,7 +1135,9 @@ inline Bool Tree::next_exist(Move mov, Long_I treeInd /*optional*/)
 	return false;
 }
 
-// return 0 if successful
+// return 0 if successful and new node created
+// return 1 if linked to existing node and no Ko
+// return 2 if linked to existing node and has Ko
 // return -1 if there is all legal moves already exists
 // return -2 if double pass caused end of game
 Int Tree::rand_move(Long_I treeInd /*optional*/)
@@ -1127,10 +1145,11 @@ Int Tree::rand_move(Long_I treeInd /*optional*/)
 	error("update this function from rand_smart_move()");
 }
 
-// return 0 if successful
-// return -1 if there is all legal moves already exists (do nothing)
+// return 0 if successful and new node created
+// return 1 if linked to existing node and no Ko
+// return 2 if linked to existing node and has Ko
+// return -1 if there is all legal moves already exists
 // return -2 if passed and game ends
-// return 1 if successful but dumb
 Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 {
 	Bool exist, exist_pass = false;
@@ -1169,9 +1188,9 @@ Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 		else if (ret == 0)
 			return 0; // new node created
 		else if (ret == 1)
-			todo  // linked to an existing node
+			return 1;  // linked to an existing node, no Ko
 		else if (ret == -2)
-			todo // a ko is found and linked
+			return 2; // linked to existing node, has Ko
 	}
 
 	// no non-dumb placing left, consider passing
@@ -1274,90 +1293,85 @@ inline void Tree::solve_end(Long_I treeInd)
 // this is a recursive function
 // using rand_smart_move() to generate moves until a better one is available
 // assuming there is no branch after treeInd for now
-// TODO: what if rand_smart_move() gets a ko???
-void Tree::solve(Long_I treeInd /*optional*/)
+// return 0 if successful
+// return -1 if at least one downstream ko exists, and all other descendents have been solved
+//           all downstream ko stored in Tree::m_ko_treeInds, best downstream solution stored in Tree::m_ko_best
+
+Int Tree::solve(Long_I treeInd /*optional*/)
 {
 	Int i, ret, child_treeInd;
 	Long treeInd1 = def(treeInd);
-	Sol best = BAD;
+	Sol & best = m_nodes[treeInd1].m_best_child_sol;
+	Bool found_ko = false;
+
+	// if already solved
+	if (solution(treeInd1) != UNCLEAR) {
+		if (solution(treeInd1) == KO_ONLY) {
+			error("unhandled situation!");
+		}
+		return 0;
+	}
 
 	// enumerate every child
 	for (i = 0; i < 1000; ++i) {
 		ret = rand_smart_move(treeInd1);
-		// legal
-		if (ret == 0 || ret == 1) {
+		// new node created (might be a first pass)
+		if (ret == 0) {
 			child_treeInd = nnode() - 1;
-			solve(child_treeInd);
-			if (solution(child_treeInd) == BAD)
+			ret = solve(child_treeInd);
+			if (ret == -1) {
 				continue;
+			}
+			if (solution(child_treeInd) == BAD) {
+				continue;
+			}
 			if (best < solution(child_treeInd))
 				best = solution(child_treeInd);
 			if (best == GOOD)
-				solution(treeInd1) = BAD; return;
+				solution(treeInd1) = BAD; return 0;
 		}
-		// all children are solved
-		if (ret == -1) {
-			if (best == FAIR)
-				solution(treeInd1) = FAIR;
-			else // best == BAD
-				solution(treeInd1) = GOOD;
-			return;
+		// linked to existing node, no Ko
+		else if (ret == 1) {
+			child_treeInd = m_nodes[treeInd1].next(-1);
+			if (solution(child_treeInd) == UNCLEAR)
+				solve(child_treeInd);
 		}
-		// double pass caused end of game
-		if (ret == -2) {
+		// linked to existing node, has Ko
+		else if (ret == 2) {
+			Long child_treeInd = m_nodes[treeInd1].next(-1);
+			m_ko_treeInds.push_back(child_treeInd);
+			found_ko = true;
+			continue;
+		}
+		// all children exist
+		else if (ret == -1) {
+			m_nodes[treeInd1].m_all_child_exist = true;
+			// all children solved
+			if (!found_ko) {
+				if (best == FAIR)
+					solution(treeInd1) = FAIR;
+				else // best == BAD
+					solution(treeInd1) = GOOD;
+				return 0;
+			}
+			// not all children solved
+			else {
+				solution(treeInd1) = KO_ONLY;
+				return -1;
+			}
+		}
+		// new pass node created, double pass caused end of game
+		else if (ret == -2) {
 			// child is already solved by game result
 			child_treeInd = nnode() - 1;
 			if (best < solution(child_treeInd))
 				best = solution(child_treeInd);
 			if (best == GOOD)
-				solution(treeInd1) = BAD; return;
+				solution(treeInd1) = BAD; return 0;
 		}
 	}
 
-	// all legal moves already exists
-	// TODO
-
-	// =========== scratch ================
-	// rule No.1
-	if (nextNode(0).m_sol == GOOD) {
-		node().m_sol = BAD; return; // solved
-	}
-	else {
-		solve(m_nodes[m_treeInd].next(0)); // solve the only existing child
-	}
-	
-	// create another chil and try to solve it in each loop
-	for (i = 0; i < 10000; ++i) {
-		// return 0 if successful
-		// return -1 if there is all legal moves already exists
-		// return -2 if double pass caused end of game
-		// return 1 if successful but dumb
-		ret = rand_smart_move();
-		if (ret == 0) {
-			solve(m_nodes[m_treeInd].next(0));
-		}
-		else if (ret == 1)
-			; // save for later to solve
-		if (ret == -1) {
-			break;
-		}
-		if (ret == -2) {
-			// use rule No.1
-			// then use rule No.2, record if it is a draw
-			continue;
-		}
-	}
-
-	// rule No 2, must solve all children one by one
-	for (i = 0; i < m_nodes[m_treeInd].nnext(); ++i) {
-
-	}
-
-
-	if (who(treeInd1) == m_nodes[m_treeInd].m_sol) {
-		m_treeInd = m_nodes[m_treeInd].last(0);
-	}
-	//
+	error("unkown error!"); return -1;
 }
 
 // initialize class static members
