@@ -34,6 +34,18 @@ inline Who next(Who_I s)
 	error("opposite(Who_I): unknown error!");
 }
 
+Sol who2sol(Who_I player, Who_I winner)
+{
+	if (player == winner)
+		return GOOD;
+	else if (next(player) == winner)
+		return BAD;
+	else if (winner == DRAW)
+		return FAIR;
+	else
+		error("who2sol(): unkown error!");
+}
+
 // board size Nx, may only set once
 inline Char board_Nx(Char_I Nx = -1)
 {
@@ -105,14 +117,14 @@ public:
 	{ assert(type != PLACE); m_x = -type; }
 
 	// properties
-	Bool isplace() { return m_x >= 0; }
-	Bool ispass() { return m_x == -1; }
-	Bool isedit() { return m_x == -2; }
-	Bool isinit() { return m_x == -3; }
+	Bool isplace() const { return m_x >= 0; }
+	Bool ispass() const { return m_x == -1; }
+	Bool isedit() const { return m_x == -2; }
+	Bool isinit() const { return m_x == -3; }
 	Act type() // 0: isplace(), 1: ispass(), 2: isedit(), 3: isinit()
 	{ return isplace()? PLACE: ispass()? PASS: isedit()? EDIT: INIT; }
-	inline Char x();
-	inline Char y();
+	inline Char x() const;
+	inline Char y() const;
 	Bool operator==(const Move &rhs) const;
 
 	// edit
@@ -131,7 +143,7 @@ inline Move::Move(Char_I x, Char_I y) : m_x(x), m_y(y)
 #endif
 }
 
-inline Char Move::x()
+inline Char Move::x() const
 {
 #ifdef _CHECK_BOUND_
 	if ( m_x < 0 ) error("Move::x(): not a coord!");
@@ -139,7 +151,7 @@ inline Char Move::x()
 	return m_x;
 }
 
-inline Char Move::y()
+inline Char Move::y() const
 {
 #ifdef _CHECK_BOUND_
 	if (m_x < 0) error("Move::y(): not a coord!");
@@ -782,7 +794,12 @@ public:
 
 	Long nnode() const { return m_nodes.size(); } // return number of nodes in the tree
 
+	inline Bool isend(Long_I treeInd = -1); // if a node is an end node
+
 	inline Node & node(Long_I treeInd = -1) // return a reference of a node
+	{ return m_nodes[def(treeInd)]; }
+
+	inline const Node & node(Long_I treeInd = -1) const // return a reference of a node
 	{ return m_nodes[def(treeInd)]; }
 
 	inline Long last(Long_I treeInd = -1, Int_I forkInd = 0) const; // return an index of the last node of a node
@@ -795,10 +812,10 @@ public:
 	const Node & nextNode(Long_I treeInd = -1, Int_I forkInd = 0) // return a reference of the next node of a node
 	{ return m_nodes[next(treeInd, forkInd)]; }
 
-	Who who(Long_I treeInd = -1) // who played the current step
+	Who who(Long_I treeInd = -1) const // who played the node
 	{ return m_nodes[def(treeInd)].who(); }
 
-	inline void disp_board(Long_I treeInd = -1); // display board
+	inline void disp_board(Long_I treeInd = -1) const; // display board
 
 	inline Int pass(Long_I treeInd = -1);
 
@@ -828,6 +845,8 @@ public:
 	// randomly play to the end of the game from a node (default: from top node)
 	inline Int rand_game(Long_I treeInd = 0, Bool_I out = false);
 
+	inline void solve_end(Long_I treeInd = -1); // solve a bottom node
+
 	inline void solve(Long_I treeInd = -1); // analyse who has winning strategy for a node
 
 	Sol & solution(Long_I treeInd = -1)
@@ -855,6 +874,18 @@ Tree::Tree() : m_treeInd(0)
 	m_nodes.push_back(node);
 }
 
+inline Bool Tree::isend(Long_I treeInd)
+{
+	Long treeInd1 = def(treeInd);
+	if (m_nodes[treeInd1].nnext() > 0) {
+		if (m_nodes[treeInd1].next(0) == -1) {
+			return true;
+			if (m_nodes[treeInd1].nnext() > 1)
+				error("something is wrong!");
+		}
+	}
+}
+
 inline Long Tree::last(Long_I treeInd /*optional*/, Int_I forkInd /*optional*/) const
 {
 	const Node &node = m_nodes[def(treeInd)];
@@ -867,17 +898,17 @@ inline Long Tree::next(Long_I treeInd /*optional*/, Int_I forkInd /*optional*/) 
 	return node.next(forkInd);
 }
 
-inline void Tree::disp_board(Long_I treeInd /*optional*/)
+inline void Tree::disp_board(Long_I treeInd /*optional*/) const
 {
 	Char x, y;
 	Long treeInd1 = def(treeInd);
-	Node & node = m_nodes[treeInd1];
+	const Node & node = m_nodes[treeInd1];
 	if (node.isinit())
 		cout << "(empty)";
 	else {
-		if (who() == BLACK)
+		if (who(treeInd1) == BLACK)
 			cout << "(black ";
-		else if (who() == WHITE)
+		else if (who(treeInd1) == WHITE)
 			cout << "(white ";
 		else
 			error("Tree:disp(): illegal side name!");
@@ -900,12 +931,14 @@ inline Int Tree::pass(Long_I treeInd /*optional*/)
 {
 	Node node;
 	const Long treeInd1 = def(treeInd);
-	node.pass(::next(who()), treeInd1, m_nodes[treeInd1].poolInd());
+	node.pass(::next(who(treeInd1)), treeInd1, m_nodes[treeInd1].poolInd());
 	m_nodes.push_back(node);
+	m_nodes[treeInd1].push_next(index());
 	// check double pass (game ends)
 	if (m_nodes[treeInd1].ispass()) {
-		m_nodes[treeInd1].push_next(-1);
-		if (treeInd < 0) ++m_treeInd;
+		m_nodes[nnode() - 1].push_next(-1);
+		// check result
+		solve_end(nnode() - 1);
 		return -1;
 	}
 	if(treeInd < 0) ++m_treeInd;
@@ -956,7 +989,7 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 	}
 
 	// update board and check illegal move (Ko no checked!)
-	if (board.place(x, y, ::next(who())))
+	if (board.place(x, y, ::next(who(treeInd1))))
 		return -1;
 
 	// check Ko
@@ -979,7 +1012,7 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 	// board is new
 	// push board to pool
 	m_pool.push(board, search_ret, orderInd, treeInd1+1);
-	node.place(x, y, ::next(who()), treeInd1, m_pool.size()-1);
+	node.place(x, y, ::next(who(treeInd1)), treeInd1, m_pool.size()-1);
 
 	// add Node to tree
 	node.push_next(treeInd1 + 1);
@@ -1121,15 +1154,15 @@ Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 		if (ret < 0)
 			continue;
 		// check dumb eye filling
-		if (get_board().is_dumb_eye_filling(x, y, ::next(who()))) {
+		if (get_board().is_dumb_eye_filling(x, y, ::next(who(treeInd1)))) {
 			dumb_xy.push_back(i);
 			continue;
 		}
-		if (get_board().is_dumb_2eye_filling(x, y, ::next(who()))) {
+		if (get_board().is_dumb_2eye_filling(x, y, ::next(who(treeInd1)))) {
 			dumb_xy.push_back(i);
 			continue;
 		}
-		if (place(x, y) < 0)
+		if (place(x, y, treeInd1) < 0)
 			continue;
 		else
 			return 0;
@@ -1137,7 +1170,7 @@ Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 
 	// no non-dumb placing left, consider passing
 	if (!next_exist(Move(PASS))) {
-		if (pass()) return -2; // double pass
+		if (pass(treeInd1)) return -2; // double pass
 		else return 0; // first pass
 	}
 
@@ -1191,22 +1224,44 @@ inline Int Tree::rand_game(Long_I treeInd, Bool_I out)
 	bscore4 = this->bscore4();
 	
 	if (winner(bscore4) == BLACK) {
-		solution() = BLACK;
+		solution() = who2sol(who(), BLACK);
 		if (out) cout << "black wins!";
 		if (out) cout << "  (score: " << 0.25*bscore4 << ")\n\n";
 	}
 	else if (winner(bscore4) == WHITE) {
-		solution() = WHITE;
+		solution() = who2sol(who(), WHITE);
 		if (out) cout << "white wins!";
 		if (out) cout << "  (score: " << board_Nx()*board_Ny() - 0.25*bscore4 << ")\n\n";
 	}
 	else { // draw
-		solution() = DRAW;
+		solution() = FAIR;
 		if (out) cout << "draw!\n\n";
 	}
 	if (out) writeSGF("randdom_game.sgf");
 
 	return 0;
+}
+
+inline void Tree::solve_end(Long_I treeInd)
+{
+	Int bscore4;
+	Long treeInd1 = def(treeInd);
+
+	bscore4 = Tree::bscore4(treeInd1);
+
+	// TODO check if this is an end node
+	if (!isend(treeInd1))
+		error("Tree::solve_end(): unkown error!");
+
+	if (winner(bscore4) == BLACK) {
+		solution(treeInd1) = who2sol(who(), BLACK);
+	}
+	else if (winner(bscore4) == WHITE) {
+		solution(treeInd1) = who2sol(who(), WHITE);
+	}
+	else { // draw
+		solution(treeInd1) = FAIR;
+	}
 }
 
 // might m_treeInd be changed? it shouldn't
@@ -1217,16 +1272,15 @@ inline Int Tree::rand_game(Long_I treeInd, Bool_I out)
 void Tree::solve(Long_I treeInd /*optional*/)
 {
 	Int i, ret;
+	Long treeInd1 = def(treeInd);
 	Sol best;
-	
-	if (treeInd >= 0) m_treeInd = treeInd;
 
 	// enumerate every child
 	for (i = 0; i < 1000; ++i) {
-		ret = rand_smart_move();
+		ret = rand_smart_move(treeInd1);
 		// legal
 		if (ret == 0 || ret == 1) {
-			solve();
+			solve(nnode()-1);
 			if (solution() > best)
 				best = solution();
 			if (best == GOOD)
@@ -1283,7 +1337,7 @@ void Tree::solve(Long_I treeInd /*optional*/)
 	}
 
 
-	if (who() == m_nodes[m_treeInd].m_sol) {
+	if (who(treeInd1) == m_nodes[m_treeInd].m_sol) {
 		m_treeInd = m_nodes[m_treeInd].last(0);
 	}
 	//
@@ -1468,4 +1522,25 @@ int main()
 	// computer_vs_computer_ui();
 	// human_vs_computer_ui();
 	// human_vs_human_ui();
+	
+	Int Nx, Ny, ret, i = 0, bscore4, x, y;
+	Doub komi;
+	Char color;
+
+	board_Nx(3); board_Ny(3); // set board size
+	komi2(0); // set koomi
+	Tree tree;
+
+	// debug: edit board here
+	tree.place(1, 1); tree.place(0, 2);
+	tree.place(1, 0); tree.place(2, 0);
+	tree.place(0, 1); tree.place(2, 2);
+	tree.place(1, 2); tree.pass();
+	// end edit board
+
+	i = 0;
+	cout << "\n\nstep " << i << " "; ++i;
+	tree.disp_board();
+
+	tree.solve();
 }
