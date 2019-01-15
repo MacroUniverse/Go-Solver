@@ -933,7 +933,7 @@ inline Int Tree::pass(Long_I treeInd /*optional*/)
 	const Long treeInd1 = def(treeInd);
 	node.pass(::next(who(treeInd1)), treeInd1, m_nodes[treeInd1].poolInd());
 	m_nodes.push_back(node);
-	m_nodes[treeInd1].push_next(index());
+	m_nodes[treeInd1].push_next(nnode()-1);
 	// check double pass (game ends)
 	if (m_nodes[treeInd1].ispass()) {
 		m_nodes[nnode() - 1].push_next(-1);
@@ -977,13 +977,14 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 	const Long treeInd1 = def(treeInd);
 	Node node;
 	Board board;
-	board = get_board();
+	board = get_board(treeInd1);
 	// first move
 	if (treeInd1 == 0) {
 		board.place(x, y, BLACK);
 		m_pool.push(board, -3, 0, treeInd1);
 		node.place(x, y, BLACK, treeInd1, m_pool.size()-1);
 		m_nodes.push_back(node);
+		m_nodes[treeInd1].push_next(nnode() - 1);
 		if (treeInd < 0) m_treeInd = 1;
 		return 0;
 	}
@@ -1015,8 +1016,8 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 	node.place(x, y, ::next(who(treeInd1)), treeInd1, m_pool.size()-1);
 
 	// add Node to tree
-	node.push_next(treeInd1 + 1);
 	m_nodes.push_back(node);
+	m_nodes[treeInd1].push_next(nnode() - 1);
 	if (treeInd<0) ++m_treeInd;
 	return 0;
 }
@@ -1127,8 +1128,8 @@ Int Tree::rand_move(Long_I treeInd /*optional*/)
 }
 
 // return 0 if successful
-// return -1 if there is all legal moves already exists
-// return -2 if double pass caused end of game
+// return -1 if there is all legal moves already exists (do nothing)
+// return -2 if passed and game ends
 // return 1 if successful but dumb
 Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 {
@@ -1162,14 +1163,19 @@ Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 			dumb_xy.push_back(i);
 			continue;
 		}
-		if (place(x, y, treeInd1) < 0)
-			continue;
-		else
-			return 0;
+		ret = place(x, y, treeInd1);
+		if (ret == -1)
+			continue; // illegal move, no change
+		else if (ret == 0)
+			return 0; // new node created
+		else if (ret == 1)
+			todo  // linked to an existing node
+		else if (ret == -2)
+			todo // a ko is found and linked
 	}
 
 	// no non-dumb placing left, consider passing
-	if (!next_exist(Move(PASS))) {
+	if (!next_exist(Move(PASS), treeInd1)) {
 		if (pass(treeInd1)) return -2; // double pass
 		else return 0; // first pass
 	}
@@ -1254,10 +1260,10 @@ inline void Tree::solve_end(Long_I treeInd)
 		error("Tree::solve_end(): unkown error!");
 
 	if (winner(bscore4) == BLACK) {
-		solution(treeInd1) = who2sol(who(), BLACK);
+		solution(treeInd1) = who2sol(who(treeInd1), BLACK);
 	}
 	else if (winner(bscore4) == WHITE) {
-		solution(treeInd1) = who2sol(who(), WHITE);
+		solution(treeInd1) = who2sol(who(treeInd1), WHITE);
 	}
 	else { // draw
 		solution(treeInd1) = FAIR;
@@ -1271,29 +1277,40 @@ inline void Tree::solve_end(Long_I treeInd)
 // TODO: what if rand_smart_move() gets a ko???
 void Tree::solve(Long_I treeInd /*optional*/)
 {
-	Int i, ret;
+	Int i, ret, child_treeInd;
 	Long treeInd1 = def(treeInd);
-	Sol best;
+	Sol best = BAD;
 
 	// enumerate every child
 	for (i = 0; i < 1000; ++i) {
 		ret = rand_smart_move(treeInd1);
 		// legal
 		if (ret == 0 || ret == 1) {
-			solve(nnode()-1);
-			if (solution() > best)
-				best = solution();
+			child_treeInd = nnode() - 1;
+			solve(child_treeInd);
+			if (solution(child_treeInd) == BAD)
+				continue;
+			if (best < solution(child_treeInd))
+				best = solution(child_treeInd);
 			if (best == GOOD)
-				solution() = BAD; return;
+				solution(treeInd1) = BAD; return;
 		}
-		// all legal moves already exists
+		// all children are solved
 		if (ret == -1) {
-			break;
+			if (best == FAIR)
+				solution(treeInd1) = FAIR;
+			else // best == BAD
+				solution(treeInd1) = GOOD;
+			return;
 		}
 		// double pass caused end of game
 		if (ret == -2) {
-			// this child is already solved by game result
-			continue;
+			// child is already solved by game result
+			child_treeInd = nnode() - 1;
+			if (best < solution(child_treeInd))
+				best = solution(child_treeInd);
+			if (best == GOOD)
+				solution(treeInd1) = BAD; return;
 		}
 	}
 
@@ -1532,10 +1549,10 @@ int main()
 	Tree tree;
 
 	// debug: edit board here
-	tree.place(1, 1); tree.place(0, 2);
+	tree.place(1, 1);
+	tree.place(0, 2);
 	tree.place(1, 0); tree.place(2, 0);
-	tree.place(0, 1); tree.place(2, 2);
-	tree.place(1, 2); tree.pass();
+	tree.place(0, 1);
 	// end edit board
 
 	i = 0;
