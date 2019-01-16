@@ -4,6 +4,10 @@
 #include "arithmatic.h"
 #include <ctime>
 
+#ifndef _RAND_SEED_
+#define _RAND_SEED_ std::time(nullptr)
+#endif
+
 namespace slisc
 {
 	namespace internal
@@ -24,7 +28,7 @@ namespace slisc
 				return (x + v) ^ w;
 			}
 		public:
-			Ran(Ullong j = std::time(nullptr)) :
+			Ran(Ullong j = _RAND_SEED_) :
 				v(4101842887655102017LL), w(1) {
 				u = j ^ v; int64();
 				v = u; int64();

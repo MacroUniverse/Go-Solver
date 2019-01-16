@@ -3,14 +3,15 @@
 #include <vector>
 #include <string>
 #include <fstream>
+
+#ifndef NDEBUG
+#define _RAND_SEED_ 0
+#endif
+
 #include "SLISC/slisc.h"
 #include "SLISC/random.h"
 #include "SLISC/search.h"
 #include "SLISC/time.h"
-
-#ifndef NDEBUG
-#define _CHECK_BOUND_
-#endif
 
 using namespace slisc;
 using std::vector; using std::string;
@@ -67,11 +68,26 @@ inline Char board_Ny(Char_I Ny = -1)
 inline Int komi2(Int_I k2 = -1132019)
 {
 	static Doub k20 = -1132019;
-	if (k2 != -1132019)
+	if (k2 != -1132019) {
+		if (abs(k2) > 2 * board_Nx() * board_Ny())
+			error("komi too large or too small! One side always win!");
 		k20 = k2; // set komi
+	}
 	else if (k20 == -1132019)
 		error("komi(): komi unset!");
 	return k20;
+}
+
+// complementary territory (opponent's territory)
+inline Int comp_territory2(Int_I territory2)
+{
+	return 2 * board_Nx()*board_Ny() - territory2;
+}
+
+// complementary score (opponent's territory)
+inline Int comp_score2(Int_I score2)
+{
+	return comp_territory2(score2);
 }
 
 // coordinates for a move, or "pass"
@@ -176,11 +192,12 @@ private:
 public:
 	// solution related
 	Sol m_sol; // Sol::GOOD/Sol::BAD/Sol::FAIR
-	Int m_territory2; // territory guaranteed, -1 means unclear
+	Int m_score2; // an over-estimation of final score (two gods playing), -1 means unclear
 	Sol m_best_child_sol; // solution of the best child that are already solved
+	Int m_best_child_sco2; // score of the best child that are already solved
 	Bool m_all_child_exist; // all legal children exist in the tree
 
-	Node(): m_sol(Sol::UNKNOWN), m_best_child_sol(Sol::BAD), m_all_child_exist(false), m_territory2(-1) {}
+	Node(): m_sol(Sol::UNKNOWN), m_best_child_sol(Sol::BAD), m_best_child_sco2(-1), m_all_child_exist(false), m_score2(-1) {}
 	
 	// properties
 	using Move::isplace;
@@ -852,40 +869,26 @@ public:
 
 	inline Int solve(Long_I treeInd = -1); // analyse who has winning strategy for a node
 
-	Who winner(Long treeInd = -1)
-	{
-		if (solution() == Sol::UNKNOWN)
-			return Who::NONE;
-		Long treeInd1 = def(treeInd);
-		if (who(treeInd1) == Who::BLACK) {
-			if (solution() == Sol::GOOD)
-				return Who::BLACK;
-			if (solution() == Sol::BAD)
-				return Who::WHITE;
-			if (solution() == Sol::FAIR)
-				return Who::DRAW;
-		}
-		else if (who(treeInd1) == Who::WHITE) {
-			if (solution() == Sol::GOOD)
-				return Who::WHITE;
-			if (solution() == Sol::BAD)
-				return Who::BLACK;
-			if (solution() == Sol::FAIR)
-				return Who::DRAW;
-		}
-		else
-			error("illegal Who input");
-	}
+	Who winner(Long treeInd = -1);
 
 	void calc_sol(Long_I treeInd = -1); // update m_sol based on m_territory2 and komi
 
-	void calc_territory(Long_I treeInd = -1); // calculate territory and save to m_territory2
+	void calc_score(Long_I treeInd = -1); // calculate territory and save to m_territory2
 
-	Int territory2(Long_I treeInd = -1) const
-	{ return node(def(treeInd)).m_territory2; }
+	Int & score2(Long_I treeInd = -1)
+	{ return node(def(treeInd)).m_score2; }
 
 	Sol & solution(Long_I treeInd = -1)
 	{ return node(def(treeInd)).m_sol; }
+
+	Sol & best_child_sol(Long_I treeInd = -1)
+	{ return node(def(treeInd)).m_best_child_sol; }
+
+	Int & best_child_sco2(Long_I treeInd = -1)
+	{ return node(def(treeInd)).m_best_child_sco2; }
+
+	Bool & all_child_exist(Long_I treeInd = -1)
+	{ return m_nodes[def(treeInd)].m_all_child_exist; }
 
 	// set default argument treeInd
 	Long def(Long_I treeInd) const
@@ -1187,11 +1190,11 @@ Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 		if (ret < 0)
 			continue;
 		// check dumb eye filling
-		if (get_board().is_dumb_eye_filling(x, y, ::next(who(treeInd1)))) {
+		if (get_board(treeInd1).is_dumb_eye_filling(x, y, ::next(who(treeInd1)))) {
 			dumb_xy.push_back(i);
 			continue;
 		}
-		if (get_board().is_dumb_2eye_filling(x, y, ::next(who(treeInd1)))) {
+		if (get_board(treeInd1).is_dumb_2eye_filling(x, y, ::next(who(treeInd1)))) {
 			dumb_xy.push_back(i);
 			continue;
 		}
@@ -1263,11 +1266,11 @@ inline Int Tree::rand_game(Long_I treeInd, Bool_I out)
 	
 	if (winner() == Who::BLACK) {
 		if (out) cout << "black wins!";
-		if (out) cout << "  (score: " << 0.5*territory2() << ")\n\n";
+		if (out) cout << "  (score: " << 0.5*score2() << ")\n\n";
 	}
 	else if (winner() == Who::WHITE) {
 		if (out) cout << "white wins!";
-		if (out) cout << "  (score: " << 0.5*territory2() << ")\n\n";
+		if (out) cout << "  (score: " << 0.5*score2() << ")\n\n";
 	}
 	else { // draw
 		if (out) cout << "draw!\n\n";
@@ -1285,7 +1288,7 @@ inline void Tree::solve_end(Long_I treeInd)
 	if (!isend(treeInd1))
 		error("Tree::solve_end(): unkown error!");
 
-	calc_territory(); calc_sol();
+	calc_score(treeInd1); calc_sol(treeInd1);
 }
 
 // might m_treeInd be changed? it shouldn't
@@ -1300,7 +1303,6 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 {
 	Int i, ret, child_treeInd;
 	Long treeInd1 = def(treeInd);
-	Sol & best = m_nodes[treeInd1].m_best_child_sol;
 	Bool found_ko = false;
 
 	// if already solved
@@ -1311,29 +1313,33 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 		return 0;
 	}
 
-	// enumerate every child
+	// enumerate children
 	for (i = 0; i < 1000; ++i) {
 		ret = rand_smart_move(treeInd1);
-		// new node created (might be a first pass)
-		if (ret == 0) {
-			child_treeInd = nnode() - 1;
+		if (ret == 0 || ret == 1) {
+			// new node created (might be a first pass)
+			if (ret == 0) {
+				child_treeInd = nnode() - 1;
+			}
+			// linked to existing node, no Ko
+			else if (ret == 1)
+				child_treeInd = m_nodes[treeInd1].next(-1);
+			else
+				error("unhandled case!");
+
 			ret = solve(child_treeInd);
 			if (ret == -1) {
-				continue;
+				continue; // downstream ko exists
 			}
-			if (solution(child_treeInd) == Sol::BAD) {
-				continue;
+			if (best_child_sco2(treeInd1) < score2(child_treeInd)) {
+				best_child_sco2(treeInd1) = score2(child_treeInd);
+				best_child_sol(treeInd1) = solution(child_treeInd);
+				if (best_child_sol(treeInd1) == Sol::GOOD) {
+					solution(treeInd1) = Sol::BAD;
+					score2(treeInd1) = comp_score2(best_child_sco2(treeInd1));
+					return 0;
+				}
 			}
-			if (best < solution(child_treeInd))
-				best = solution(child_treeInd);
-			if (best == Sol::GOOD)
-				solution(treeInd1) = Sol::BAD; return 0;
-		}
-		// linked to existing node, no Ko
-		else if (ret == 1) {
-			child_treeInd = m_nodes[treeInd1].next(-1);
-			if (solution(child_treeInd) == Sol::UNKNOWN)
-				solve(child_treeInd);
 		}
 		// linked to existing node, has Ko
 		else if (ret == 2) {
@@ -1344,18 +1350,23 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 		}
 		// all children exist
 		else if (ret == -1) {
-			m_nodes[treeInd1].m_all_child_exist = true;
+			all_child_exist(treeInd1) = true;
 			// all children solved
 			if (!found_ko) {
-				if (best == Sol::FAIR)
+				if (best_child_sol(treeInd1) == Sol::FAIR) {
 					solution(treeInd1) = Sol::FAIR;
-				else // best == Sol::BAD
+					score2(treeInd1) = comp_score2(best_child_sco2(treeInd1));
+				}
+				else { // best == Sol::BAD
 					solution(treeInd1) = Sol::GOOD;
+					score2(treeInd1) = comp_score2(best_child_sco2(treeInd1));
+				}
 				return 0;
 			}
 			// not all children solved
 			else {
 				solution(treeInd1) = Sol::KO_ONLY;
+				score2(treeInd1) = comp_score2(best_child_sco2(treeInd1));
 				return -1;
 			}
 		}
@@ -1363,34 +1374,71 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 		else if (ret == -2) {
 			// child is already solved by game result
 			child_treeInd = nnode() - 1;
-			if (best < solution(child_treeInd))
-				best = solution(child_treeInd);
-			if (best == Sol::GOOD)
-				solution(treeInd1) = Sol::BAD; return 0;
+			if (best_child_sco2(treeInd1) < score2(child_treeInd)) {
+				best_child_sco2(treeInd1) = score2(child_treeInd);
+				best_child_sol(treeInd1) = solution(child_treeInd);
+				if (best_child_sol(treeInd1) == Sol::GOOD) {
+					solution(treeInd1) = Sol::BAD;
+					score2(treeInd1) = comp_score2(best_child_sco2(treeInd1));
+					return 0;
+				}
+			}
 		}
+		else
+			error("unhandled return!");
 	}
-
 	error("unkown error!"); return -1;
+}
+
+Who Tree::winner(Long treeInd)
+{
+	if (solution() == Sol::UNKNOWN)
+		return Who::NONE;
+	Long treeInd1 = def(treeInd);
+	if (who(treeInd1) == Who::BLACK) {
+		if (solution() == Sol::GOOD)
+			return Who::BLACK;
+		if (solution() == Sol::BAD)
+			return Who::WHITE;
+		if (solution() == Sol::FAIR)
+			return Who::DRAW;
+	}
+	else if (who(treeInd1) == Who::WHITE) {
+		if (solution() == Sol::GOOD)
+			return Who::WHITE;
+		if (solution() == Sol::BAD)
+			return Who::BLACK;
+		if (solution() == Sol::FAIR)
+			return Who::DRAW;
+	}
+	else
+		error("illegal Who input");
 }
 
 void Tree::calc_sol(Long_I treeInd)
 {
 	Long treeInd1 = def(treeInd);
 
-	Int territory4_draw = board_Nx()*board_Ny() * 2;
-	Int territory4 = 2 * node(treeInd1).m_territory2;
-	if (territory4 > territory4_draw)
+	Int score4_draw = board_Nx()*board_Ny() * 2;
+	if (who(treeInd1) == Who::BLACK)
+		score4_draw += komi2();
+	else if (who(treeInd1) == Who::WHITE)
+		score4_draw -= komi2();
+	else
+		error("illegal player!");
+	Int score4 = 2 * score2(treeInd1);
+	if (score4 > score4_draw)
 		solution(treeInd1) = Sol::GOOD;
-	else if (territory4 < territory4_draw)
+	else if (score4 < score4_draw)
 		solution(treeInd1) = Sol::BAD;
 	else
 		solution(treeInd1) = Sol::FAIR;
 }
 
-void Tree::calc_territory(Long_I treeInd = -1) // calculate territory and save to m_territory2
+void Tree::calc_score(Long_I treeInd) // calculate territory and save to m_territory2
 {
 	Long treeInd1 = def(treeInd);
-	node(treeInd1).m_territory2 = get_board(def(treeInd1)).calc_territory2(who(treeInd1));
+	node(treeInd1).m_score2 = get_board(def(treeInd1)).calc_territory2(who(treeInd1));
 }
 
 // initialize class static members
@@ -1499,11 +1547,11 @@ void human_vs_computer_ui()
 
 	if (tree.winner() == Who::BLACK) {
 		cout << "black wins!";
-		cout << "  (score: " << 0.5*tree.territory2() << ")\n\n";
+		cout << "  (score: " << 0.5*tree.score2() << ")\n\n";
 	}
 	else if (tree.winner() == Who::WHITE) {
 		cout << "white wins!";
-		cout << "  (score: " << 0.5*tree.territory2() << ")\n\n";
+		cout << "  (score: " << 0.5*tree.score2() << ")\n\n";
 	}
 	else { // draw
 		cout << "draw!\n\n";
@@ -1550,15 +1598,15 @@ void human_vs_human_ui()
 
 	cout << "game over!" << "\n\n";
 	
-	tree.solve_end;
+	tree.solve_end();
 
 	if (tree.winner() == Who::BLACK) {
 		cout << "black wins!";
-		cout << "  (score: " << 0.5*tree.territory2() << ")\n\n";
+		cout << "  (score: " << 0.5*tree.score2() << ")\n\n";
 	}
 	else if (tree.winner() == Who::WHITE) {
 		cout << "white wins!";
-		cout << "  (score: " << 0.5*tree.territory2() << ")\n\n";
+		cout << "  (score: " << 0.5*tree.score2() << ")\n\n";
 	}
 	else { // draw
 		cout << "draw!\n\n";
@@ -1580,14 +1628,11 @@ int main()
 	Char color;
 
 	board_Nx(3); board_Ny(3); // set board size
-	komi2(0); // set koomi
+	komi2(18); // set koomi
 	Tree tree;
 
 	// debug: edit board here
 	tree.place(1, 1);
-	tree.place(0, 2);
-	tree.place(1, 0); tree.place(2, 0);
-	tree.place(0, 1);
 	// end edit board
 
 	i = 0;
