@@ -17,33 +17,23 @@ using std::vector; using std::string;
 using std::ofstream; using std::cout;
 using std::cin; using std::endl;
 
-enum Who { NONE, BLACK, WHITE, UNKNOWN, DRAW }; // TODO: make this a char type
-
-enum Act { PLACE, PASS, EDIT, INIT }; // TODO: make this a char type
-
-enum Sol { BAD, FAIR, GOOD, UNCLEAR, KO_ONLY };
-
+enum class Who : Char { NONE, BLACK, WHITE, DEFAULT, DRAW }; // TODO: make this a char type
 typedef const Who Who_I;
+
+enum class Act : Char { PLACE, PASS, EDIT, INIT }; // TODO: make this a char type
+typedef const Act Act_I;
+
+enum class Sol : Char { BAD, FAIR, GOOD, UNKNOWN, KO_ONLY };
+typedef const Sol Sol_I;
+
 
 // inverse color
 inline Who next(Who_I s)
 {
-	if (s == BLACK) return WHITE;
-	if (s == WHITE) return BLACK;
-	if (s == NONE) return BLACK; // empty board
+	if (s == Who::BLACK) return Who::WHITE;
+	if (s == Who::WHITE) return Who::BLACK;
+	if (s == Who::NONE) return Who::BLACK; // empty board
 	error("opposite(Who_I): unknown error!");
-}
-
-Sol who2sol(Who_I player, Who_I winner)
-{
-	if (player == winner)
-		return GOOD;
-	else if (next(player) == winner)
-		return BAD;
-	else if (winner == DRAW)
-		return FAIR;
-	else
-		error("who2sol(): unkown error!");
 }
 
 // board size Nx, may only set once
@@ -84,20 +74,6 @@ inline Int komi2(Int_I k2 = -1132019)
 	return k20;
 }
 
-// return winner of the game
-// bscore4 is black score multiplied by 4
-// see Board::bscore4() function
-Who winner(Int_I bscore4)
-{
-	Int draw4 = board_Nx()*board_Ny() * 2;
-	if (bscore4 > draw4)
-		return BLACK;
-	else if (bscore4 < draw4)
-		return WHITE;
-	else if (bscore4 == draw4)
-		return DRAW;
-}
-
 // coordinates for a move, or "pass"
 // origin at top left, x axis points right, y axis points down
 // special codes:
@@ -111,10 +87,9 @@ private:
 	Char m_x, m_y; // coordinates or special codes
 public:
 	// constructor
-	Move() {}
-	Move(Char_I x, Char_I y);
-	Move(const Act type) // 1: pass(), 2 : edit(), 3 : init()
-	{ assert(type != PLACE); m_x = -type; }
+	inline Move() {}
+	inline Move(Char_I x, Char_I y);
+	inline Move(Act_I act);
 
 	// properties
 	Bool isplace() const { return m_x >= 0; }
@@ -122,7 +97,7 @@ public:
 	Bool isedit() const { return m_x == -2; }
 	Bool isinit() const { return m_x == -3; }
 	Act type() // 0: isplace(), 1: ispass(), 2: isedit(), 3: isinit()
-	{ return isplace()? PLACE: ispass()? PASS: isedit()? EDIT: INIT; }
+	{ return isplace()? Act::PLACE: ispass()? Act::PASS: isedit()? Act::EDIT: Act::INIT; }
 	inline Char x() const;
 	inline Char y() const;
 	Bool operator==(const Move &rhs) const;
@@ -141,6 +116,18 @@ inline Move::Move(Char_I x, Char_I y) : m_x(x), m_y(y)
 	if (x < 0 || y < 0 || x >= board_Nx() || y >= board_Ny())
 		error("Move::Move(x, y): coord < 0 !");
 #endif
+}
+
+inline Move::Move(Act_I act)
+{
+	if (act == Act::PASS)
+		m_x = -1;
+	else if (act == Act::EDIT)
+		m_x = -2;
+	else if (act == Act::INIT)
+		m_x = -3;
+	else
+		error("illegal Act type!");
 }
 
 inline Char Move::x() const
@@ -188,11 +175,12 @@ private:
 	Long m_poolInd; // pool index, board stored in Pool::m_board[m_pool_ind]
 public:
 	// solution related
-	Sol m_sol; // if two gods playing, who will win?
+	Sol m_sol; // Sol::GOOD/Sol::BAD/Sol::FAIR
+	Int m_territory2; // territory guaranteed, -1 means unclear
 	Sol m_best_child_sol; // solution of the best child that are already solved
 	Bool m_all_child_exist; // all legal children exist in the tree
 
-	Node(): m_sol(UNCLEAR), m_best_child_sol(BAD), m_all_child_exist(false) {}
+	Node(): m_sol(Sol::UNKNOWN), m_best_child_sol(Sol::BAD), m_all_child_exist(false), m_territory2(-1) {}
 	
 	// properties
 	using Move::isplace;
@@ -211,7 +199,7 @@ public:
 	inline Long next(Int_I ind) const;
 
 	// set
-	void init(Long_I poolInd) { Move::init(); m_last.resize(0); m_who = NONE; m_poolInd = poolInd; }
+	void init(Long_I poolInd) { Move::init(); m_last.resize(0); m_who = Who::NONE; m_poolInd = poolInd; }
 	void push_last(Long_I treeInd) { m_last.push_back(treeInd); }
 	void push_next(Long_I treeInd) { m_next.push_back(treeInd); }
 
@@ -249,7 +237,7 @@ public:
 	Board() {}
 
 	Board(Char_I Nx, Char_I Ny): m_data(Nx, Ny)
-	{ m_data = NONE; m_mark.resize(Nx, Ny); m_mark = 0; }
+	{ m_data = Who::NONE; m_mark.resize(Nx, Ny); m_mark = 0; }
 
 	inline Bool operator==(const Board &rhs) const
 	{ return m_data == rhs.m_data; }
@@ -263,12 +251,12 @@ public:
 	inline void connect_init() const; // use before "connect()"
 
 	// get stones connected to a given stone (fill "m_group") and calculate qi
-	inline void connect(Char_I x, Char_I y, Who_I who = UNKNOWN) const;
+	inline void connect(Char_I x, Char_I y, Who_I who = Who::DEFAULT) const;
 
 	// remove group if it is dead after placing (x,y)
 	inline void remove_group();
 
-	inline Int bscore4() const; // calculate black score (multiplied by 2)
+	inline Int territory2(Who_I) const; // calculate black score (multiplied by 2)
 
 	inline Bool is_eye(Char_I x, Char_I y, Who_I who) const;
 
@@ -303,11 +291,11 @@ inline void Board::disp() const
 	for (y = 0; y < Ny; ++y) {
 		cout << " " << Int(y) << " |";
 		for (x = 0; x < Nx; ++x) {
-			if (m_data(x,y) == NONE)
+			if (m_data(x,y) == Who::NONE)
 				cout << "   |";
-			else if (m_data(x,y) == BLACK)
+			else if (m_data(x,y) == Who::BLACK)
 				cout << " @ |";
-			else if (m_data(x,y) == WHITE)
+			else if (m_data(x,y) == Who::WHITE)
 				cout << " O |";
 			else
 				error("Board::disp(): illegal stone code!");
@@ -332,7 +320,7 @@ inline Int Board::check(Char_I x, Char_I y, Who_I who) const
 #endif
 	Int Nx = board_Nx(), Ny = board_Ny(), Nremove = 0;
 	// check if already occupied
-	if (m_data(x, y) != NONE)
+	if (m_data(x, y) != Who::NONE)
 		return -1;
 
 	// search opponent's dead stones
@@ -389,7 +377,7 @@ inline Int Board::place(Char_I x, Char_I y, Who_I who)
 	Int Nx = board_Nx(), Ny = board_Ny();
 	Bool removed = false;
 	// check if already occupied
-	if (m_data(x,y) != NONE)
+	if (m_data(x,y) != Who::NONE)
 		return -1;
 
 	// place stone
@@ -452,9 +440,9 @@ inline void Board::connect(Char_I x, Char_I y, Who_I who /*optional*/) const
 {
 	Char Nx = board_Nx(), Ny = board_Ny();
 	Who s, s0;
-	if (m_data(x, y) == NONE) {
-		if (who == UNKNOWN)
-			error("must input who!");
+	if (m_data(x, y) == Who::NONE) {
+		if (who == Who::DEFAULT)
+			error("must specify who argument!");
 		else
 			s0 = who;
 	}
@@ -468,7 +456,7 @@ inline void Board::connect(Char_I x, Char_I y, Who_I who /*optional*/) const
 		Char & mark = m_mark(x - 1, y);
 		if (s == s0 && !mark)
 			connect(x - 1, y);
-		else if (s == NONE && !mark) {
+		else if (s == Who::NONE && !mark) {
 			++m_qi; mark = 1;
 		}
 	}
@@ -478,7 +466,7 @@ inline void Board::connect(Char_I x, Char_I y, Who_I who /*optional*/) const
 		Char & mark = m_mark(x + 1, y);
 		if (s == s0 && !mark)
 			connect(x + 1, y);
-		else if (s == NONE && !mark) {
+		else if (s == Who::NONE && !mark) {
 			++m_qi; mark = 1;
 		}
 	}
@@ -488,7 +476,7 @@ inline void Board::connect(Char_I x, Char_I y, Who_I who /*optional*/) const
 		Char & mark = m_mark(x, y - 1);
 		if (s == s0 && !mark)
 			connect(x, y - 1);
-		else if (s == NONE && !mark) {
+		else if (s == Who::NONE && !mark) {
 			++m_qi; mark = 1;
 		}
 	}
@@ -498,7 +486,7 @@ inline void Board::connect(Char_I x, Char_I y, Who_I who /*optional*/) const
 		Char & mark = m_mark(x, y + 1);
 		if (s == s0 && !mark)
 			connect(x, y + 1);
-		else if (s == NONE && !mark) {
+		else if (s == Who::NONE && !mark) {
 			++m_qi; mark = 1;
 		}
 	}
@@ -508,13 +496,12 @@ inline void Board::remove_group()
 {
 	Int i;
 	for (i = 0; i < m_group.size(); ++i)
-		m_data(m_group[i].x(), m_group[i].y()) = NONE;
+		m_data(m_group[i].x(), m_group[i].y()) = Who::NONE;
 }
 
 // this will be accurate when no legal move exists
-// back score = # black on board + # single qi's surrounded by black + (other qi's)/2 - komi/2
-// black wins if score > (total grids on board)/2 + 0.1
-inline Int Board::bscore4() const
+// X territory = # X stone on board + # single qi's surrounded by X + (other qi's not surrounded by Y)/2
+inline Int Board::territory2(Who_I who) const
 {
 	Char x, y, Nx = board_Nx(), Ny = board_Ny();
 	Int black = 0, qi = 0, common_qi = 0;
@@ -522,34 +509,34 @@ inline Int Board::bscore4() const
 	for (x = 0; x < Nx; ++x)
 		for (y = 0; y < Ny; ++y) {
 			s = m_data(x, y);
-			if (s == NONE) {
+			if (s == Who::NONE) {
 				// qi not surrounded by black
-				if ((x > 0 && m_data(x - 1, y) != BLACK)
-					|| (x < Nx - 1 && m_data(x + 1, y) != BLACK)
-					|| (y > 0 && m_data(x, y - 1) != BLACK)
-					|| (y < Ny - 1 && m_data(x, y + 1) != BLACK)) {
+				if ((x > 0 && m_data(x - 1, y) != who)
+					|| (x < Nx - 1 && m_data(x + 1, y) != who)
+					|| (y > 0 && m_data(x, y - 1) != who)
+					|| (y < Ny - 1 && m_data(x, y + 1) != who)) {
 					// qi not surrounded by white
-					if ((x > 0 && m_data(x - 1, y) != WHITE)
-						|| (x < Nx - 1 && m_data(x + 1, y) != WHITE)
-						|| (y > 0 && m_data(x, y - 1) != WHITE)
-						|| (y < Ny - 1 && m_data(x, y + 1) != WHITE))
+					if ((x > 0 && m_data(x - 1, y) != next(who))
+						|| (x < Nx - 1 && m_data(x + 1, y) != next(who))
+						|| (y > 0 && m_data(x, y - 1) != next(who))
+						|| (y < Ny - 1 && m_data(x, y + 1) != next(who)))
 						++common_qi;
 				}
 				else // qi surrounded by black
 					++qi;
 			}
-			else if (s == BLACK)
+			else if (s == who)
 				++black;
-			else if (s != WHITE)
+			else if (s != next(who))
 				error("Board::result(): illegal stone!");
 		}
-	return 4*(black + qi) + 2*common_qi - komi2();
+	return 2 * (black + qi) + common_qi;
 }
 
 inline Bool Board::is_eye(Char_I x, Char_I y, Who_I who) const
 {
 	// check if already occupied
-	if (m_data(x, y) != NONE)
+	if (m_data(x, y) != Who::NONE)
 		return false;
 
 	// check if not surrounded by the same color or board
@@ -622,7 +609,7 @@ inline Bool Board::is_dumb_2eye_filling(Char_I x, Char_I y, Who_I who) const
 				connected = true;
 			}
 		}
-		else if (m_data(x1, y1) == NONE) {
+		else if (m_data(x1, y1) == Who::NONE) {
 			if (qi) return false; // more than one qi
 			qi = true; x_qi = x1; y_qi = y1;
 		}
@@ -643,7 +630,7 @@ inline Bool Board::is_dumb_2eye_filling(Char_I x, Char_I y, Who_I who) const
 				connected = true;
 			}
 		}
-		else if (m_data(x1, y1) == NONE) {
+		else if (m_data(x1, y1) == Who::NONE) {
 			if (qi) return false; // more than one qi
 			qi = true; x_qi = x1; y_qi = y1;
 		}
@@ -664,7 +651,7 @@ inline Bool Board::is_dumb_2eye_filling(Char_I x, Char_I y, Who_I who) const
 				connected = true;
 			}
 		}
-		else if (m_data(x1, y1) == NONE) {
+		else if (m_data(x1, y1) == Who::NONE) {
 			if (qi) return false; // more than one qi
 			qi = true; x_qi = x1; y_qi = y1;
 		}
@@ -685,7 +672,7 @@ inline Bool Board::is_dumb_2eye_filling(Char_I x, Char_I y, Who_I who) const
 				connected = true;
 			}
 		}
-		else if (m_data(x1, y1) == NONE) {
+		else if (m_data(x1, y1) == Who::NONE) {
 			if (qi) return false; // more than one qi
 			qi = true; x_qi = x1; y_qi = y1;
 		}
@@ -730,7 +717,7 @@ inline Bool Board::is_dumb_2eye_filling(Char_I x, Char_I y, Who_I who) const
 // all situations in the tree, sorted for quick search
 // sorting: each board is a radix 3 number, sort these numbers with ascending order
 // a pool index (poolInd) is an index for m_boards, this index should never change for the same board
-// m_treeInd will link to a tree node that is not a PASS
+// m_treeInd will link to a tree node that is not a Act::PASS
 // index to m_order is called (pool) order index (orderInd), this will change frequently for the same board!
 class Pool
 {
@@ -865,14 +852,43 @@ public:
 
 	inline Int solve(Long_I treeInd = -1); // analyse who has winning strategy for a node
 
+	Who winner(Long treeInd = -1)
+	{
+		if (solution() == Sol::UNKNOWN)
+			return Who::NONE;
+		Long treeInd1 = def(treeInd);
+		if (who(treeInd1) == Who::BLACK) {
+			if (solution() == Sol::GOOD)
+				return Who::BLACK;
+			if (solution() == Sol::BAD)
+				return Who::WHITE;
+			if (solution() == Sol::FAIR)
+				return Who::DRAW;
+		}
+		else if (who(treeInd1) == Who::WHITE) {
+			if (solution() == Sol::GOOD)
+				return Who::WHITE;
+			if (solution() == Sol::BAD)
+				return Who::BLACK;
+			if (solution() == Sol::FAIR)
+				return Who::DRAW;
+		}
+		else
+			error("illegal Who input");
+	}
+
+	void calc_sol(Long_I treeInd = -1); // update m_sol based on m_territory2 and komi
+
+	void calc_territory(Long_I treeInd = -1); // calculate territory and save to m_territory2
+
+	Int territory2(Long_I treeInd = -1) const
+	{ return node(def(treeInd)).m_territory2; }
+
 	Sol & solution(Long_I treeInd = -1)
 	{ return node(def(treeInd)).m_sol; }
 
-	inline Int bscore4(Long_I treeInd = -1) const // black score times 4
-	{ return get_board(def(treeInd)).bscore4(); }
-
-	inline Int wscore4(Long_I treeInd = -1) const // white score times 4
-	{ return 4*board_Nx()*board_Ny() - bscore4(); }
+	inline Int territory2(Long_I treeInd = -1) const // territory times 2
+	{ Long treeInd1 = def(treeInd); return get_board(treeInd1).territory2(who(treeInd1)); }
 
 	// set default argument treeInd
 	Long def(Long_I treeInd) const
@@ -922,9 +938,9 @@ inline void Tree::disp_board(Long_I treeInd /*optional*/) const
 	if (node.isinit())
 		cout << "(empty)";
 	else {
-		if (who(treeInd1) == BLACK)
+		if (who(treeInd1) == Who::BLACK)
 			cout << "(black ";
-		else if (who(treeInd1) == WHITE)
+		else if (who(treeInd1) == Who::WHITE)
 			cout << "(white ";
 		else
 			error("Tree:disp(): illegal side name!");
@@ -996,9 +1012,9 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 	board = get_board(treeInd1);
 	// first move
 	if (treeInd1 == 0) {
-		board.place(x, y, BLACK);
+		board.place(x, y, Who::BLACK);
 		m_pool.push(board, -3, 0, treeInd1);
-		node.place(x, y, BLACK, treeInd1, m_pool.size()-1);
+		node.place(x, y, Who::BLACK, treeInd1, m_pool.size()-1);
 		m_nodes.push_back(node);
 		m_nodes[treeInd1].push_next(nnode() - 1);
 		if (treeInd < 0) m_treeInd = 1;
@@ -1194,7 +1210,7 @@ Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 	}
 
 	// no non-dumb placing left, consider passing
-	if (!next_exist(Move(PASS), treeInd1)) {
+	if (!next_exist(Move(Act::PASS), treeInd1)) {
 		if (pass(treeInd1)) return -2; // double pass
 		else return 0; // first pass
 	}
@@ -1217,7 +1233,6 @@ Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 inline Int Tree::rand_game(Long_I treeInd, Bool_I out)
 {
 	Int i, ret;
-	Doub bscore4;
 
 	m_treeInd = treeInd;
 	
@@ -1246,20 +1261,18 @@ inline Int Tree::rand_game(Long_I treeInd, Bool_I out)
 	}
 	
 	if (out) cout << "game over!" << "\n\n";
-	bscore4 = this->bscore4();
 	
-	if (winner(bscore4) == BLACK) {
-		solution() = who2sol(who(), BLACK);
+	solve_end();
+	
+	if (winner() == Who::BLACK) {
 		if (out) cout << "black wins!";
-		if (out) cout << "  (score: " << 0.25*bscore4 << ")\n\n";
+		if (out) cout << "  (score: " << 0.5*territory2() << ")\n\n";
 	}
-	else if (winner(bscore4) == WHITE) {
-		solution() = who2sol(who(), WHITE);
+	else if (winner() == Who::WHITE) {
 		if (out) cout << "white wins!";
-		if (out) cout << "  (score: " << board_Nx()*board_Ny() - 0.25*bscore4 << ")\n\n";
+		if (out) cout << "  (score: " << 0.5*territory2() << ")\n\n";
 	}
 	else { // draw
-		solution() = FAIR;
 		if (out) cout << "draw!\n\n";
 	}
 	if (out) writeSGF("randdom_game.sgf");
@@ -1269,24 +1282,13 @@ inline Int Tree::rand_game(Long_I treeInd, Bool_I out)
 
 inline void Tree::solve_end(Long_I treeInd)
 {
-	Int bscore4;
 	Long treeInd1 = def(treeInd);
-
-	bscore4 = Tree::bscore4(treeInd1);
 
 	// TODO check if this is an end node
 	if (!isend(treeInd1))
 		error("Tree::solve_end(): unkown error!");
 
-	if (winner(bscore4) == BLACK) {
-		solution(treeInd1) = who2sol(who(treeInd1), BLACK);
-	}
-	else if (winner(bscore4) == WHITE) {
-		solution(treeInd1) = who2sol(who(treeInd1), WHITE);
-	}
-	else { // draw
-		solution(treeInd1) = FAIR;
-	}
+	calc_territory(); calc_sol();
 }
 
 // might m_treeInd be changed? it shouldn't
@@ -1305,8 +1307,8 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 	Bool found_ko = false;
 
 	// if already solved
-	if (solution(treeInd1) != UNCLEAR) {
-		if (solution(treeInd1) == KO_ONLY) {
+	if (solution(treeInd1) != Sol::UNKNOWN) {
+		if (solution(treeInd1) == Sol::KO_ONLY) {
 			error("unhandled situation!");
 		}
 		return 0;
@@ -1322,18 +1324,18 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 			if (ret == -1) {
 				continue;
 			}
-			if (solution(child_treeInd) == BAD) {
+			if (solution(child_treeInd) == Sol::BAD) {
 				continue;
 			}
 			if (best < solution(child_treeInd))
 				best = solution(child_treeInd);
-			if (best == GOOD)
-				solution(treeInd1) = BAD; return 0;
+			if (best == Sol::GOOD)
+				solution(treeInd1) = Sol::BAD; return 0;
 		}
 		// linked to existing node, no Ko
 		else if (ret == 1) {
 			child_treeInd = m_nodes[treeInd1].next(-1);
-			if (solution(child_treeInd) == UNCLEAR)
+			if (solution(child_treeInd) == Sol::UNKNOWN)
 				solve(child_treeInd);
 		}
 		// linked to existing node, has Ko
@@ -1348,15 +1350,15 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 			m_nodes[treeInd1].m_all_child_exist = true;
 			// all children solved
 			if (!found_ko) {
-				if (best == FAIR)
-					solution(treeInd1) = FAIR;
-				else // best == BAD
-					solution(treeInd1) = GOOD;
+				if (best == Sol::FAIR)
+					solution(treeInd1) = Sol::FAIR;
+				else // best == Sol::BAD
+					solution(treeInd1) = Sol::GOOD;
 				return 0;
 			}
 			// not all children solved
 			else {
-				solution(treeInd1) = KO_ONLY;
+				solution(treeInd1) = Sol::KO_ONLY;
 				return -1;
 			}
 		}
@@ -1366,12 +1368,32 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 			child_treeInd = nnode() - 1;
 			if (best < solution(child_treeInd))
 				best = solution(child_treeInd);
-			if (best == GOOD)
-				solution(treeInd1) = BAD; return 0;
+			if (best == Sol::GOOD)
+				solution(treeInd1) = Sol::BAD; return 0;
 		}
 	}
 
 	error("unkown error!"); return -1;
+}
+
+void Tree::calc_sol(Long_I treeInd)
+{
+	Long treeInd1 = def(treeInd);
+
+	Int territory4_draw = board_Nx()*board_Ny() * 2;
+	Int territory4 = 2 * node(treeInd1).m_territory2;
+	if (territory4 > territory4_draw)
+		solution(treeInd1) = Sol::GOOD;
+	else if (territory4 < territory4_draw)
+		solution(treeInd1) = Sol::BAD;
+	else
+		solution(treeInd1) = Sol::FAIR;
+}
+
+void Tree::calc_territory(Long_I treeInd = -1) // calculate territory and save to m_territory2
+{
+	Long treeInd1 = def(treeInd);
+	node(treeInd1).m_territory2 = get_board(def(treeInd1)).territory2(who(treeInd1));
 }
 
 // initialize class static members
@@ -1475,15 +1497,16 @@ void human_vs_computer_ui()
 		error("illegal color! must be 'b' or 'w'!");
 
 	cout << "game over!" << "\n\n";
-	bscore4 = tree.bscore4();
 
-	if (winner(bscore4) == BLACK) {
+	tree.solve_end();
+
+	if (tree.winner() == Who::BLACK) {
 		cout << "black wins!";
-		cout << "  (score: " << 0.25*bscore4 << ")\n\n";
+		cout << "  (score: " << 0.5*tree.territory2() << ")\n\n";
 	}
-	else if (winner(bscore4) == WHITE) {
+	else if (tree.winner() == Who::WHITE) {
 		cout << "white wins!";
-		cout << "  (score: " << board_Nx()*board_Ny() - 0.25*bscore4 << ")\n\n";
+		cout << "  (score: " << 0.5*tree.territory2() << ")\n\n";
 	}
 	else { // draw
 		cout << "draw!\n\n";
@@ -1529,15 +1552,16 @@ void human_vs_human_ui()
 	}
 
 	cout << "game over!" << "\n\n";
-	bscore4 = tree.bscore4();
+	
+	tree.solve_end;
 
-	if (winner(bscore4) == BLACK) {
+	if (tree.winner() == Who::BLACK) {
 		cout << "black wins!";
-		cout << "  (score: " << 0.25*bscore4 << ")\n\n";
+		cout << "  (score: " << 0.5*tree.territory2() << ")\n\n";
 	}
-	else if (winner(bscore4) == WHITE) {
+	else if (tree.winner() == Who::WHITE) {
 		cout << "white wins!";
-		cout << "  (score: " << board_Nx()*board_Ny() - 0.25*bscore4 << ")\n\n";
+		cout << "  (score: " << 0.5*tree.territory2() << ")\n\n";
 	}
 	else { // draw
 		cout << "draw!\n\n";
