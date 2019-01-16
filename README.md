@@ -17,6 +17,9 @@ The solution of a given node (good/bad/fair for the one who played this node) is
 
 Thus the most efficient algorithm will depend on how well another program can play Go (i.e. how well it can guess the best child, second best child etc.). For a given node, we should always solve the (guessed) best children first, then the (guessed) second best, etc, keeping track of the best child in the meanwhile to decide when to stop. This is more efficient than randomly choosing a child if the given node is bad, but is equally efficient if this node is good or fair (since we have to solve all children anyway). Since we don't know, we must always solve the (guessed) best child.
 
+## Solution Independent of Komi (this is awesome ! will be implemented immediately)
+With a slightly different implementation, it's possible to solve a node without knowning the komi. Instead of using good/bad/fair as the solution of a node, we can use a score instead: the final score of the current player without komi. It doesn't matter how this score is calculated (Chinese rule, Japanese rule, etc.). Similarly, to solve a node, we must find the best child, and the score of the node will the the complementary (opponent's score for the same board configuration) score of it's best child. Whenever a komi is chosen, the good/bad/fair solution for any solved node can be immediately calculated by an addition/subtraction.
+
 ## Node Implementation
 Since there might be two different nodes in the tree that have the same board configuration, in the program, they are combined as a single node, and all nodes are allowed to link to multiple parents as well as multiple children. So a `Node` object has the following important data members:
 * a `Move` object that stores either the coordinates of a move that leads to this node or an action such as "pass", "edit board" (for program flexibility) or "initialize game" (for the top node).
@@ -44,3 +47,9 @@ Since there might be two different nodes in the tree that have the same board co
 If neither ko nor upward fork is considered, the above algorithm for solving a node can be implemented easily with a recursive function `Sol Tree::solve(treeInd)`, which tries to solve a node's children one by one, by calling `solve()` itself. The end node is automatically solved when it is born (by `Tree::pass()`).
 
 However, when a ko is found and current node linked to an upstream node called ko node (linking will update the `m_next` member of the current node, but will not update `m_last` of the ko node), `solve()` will recur infinitely. To prevent this, after a ko is linked, `solve()` will push the link destination using `Tree::m_ko_treeInds.push_back()`, and keep solving other children. If a `GOOD` child is found, then the ko link will be discarded and the current solution will be `BAD`. If not, after all children are searched, `solve()` updates `Tree::m_ko_best` using the best solved child, and sets the solution to `KO_ONLY` then return failure. When the calling `solve()` sees that failure, it will search the elements `Tree::m_ko_treeInds[]` to see if any leads to the current node and remove the matching elements. If `Tree::m_ko_treeInds` becomes empty, the solution is the opposite of `Tree::m_ko_best`. If it's not empty, `solve()` will keep solving other children. If a `GOOD` child is found, the current solution will be `BAD`. If another ko is linked, push to `Tree::m_ko_treeInds` and keep solving other children, after all children are searched, `solve()` updates `Tree::m_ko_best`, and sets the solution to `KO_ONLY` then return failure.
+
+
+## GNU go
+GNU go can play 5x5 to 19x19 boards. So it might be used to guess the best child for these boards. Another advantage is it might be written in c.
+
+Other things like mini-go probably requires some training.
