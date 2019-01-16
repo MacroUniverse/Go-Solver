@@ -256,7 +256,7 @@ public:
 	// remove group if it is dead after placing (x,y)
 	inline void remove_group();
 
-	inline Int territory2(Who_I) const; // calculate black score (multiplied by 2)
+	inline Int calc_territory2(Who_I who) const; // calculate black score (multiplied by 2)
 
 	inline Bool is_eye(Char_I x, Char_I y, Who_I who) const;
 
@@ -501,7 +501,7 @@ inline void Board::remove_group()
 
 // this will be accurate when no legal move exists
 // X territory = # X stone on board + # single qi's surrounded by X + (other qi's not surrounded by Y)/2
-inline Int Board::territory2(Who_I who) const
+inline Int Board::calc_territory2(Who_I who) const
 {
 	Char x, y, Nx = board_Nx(), Ny = board_Ny();
 	Int black = 0, qi = 0, common_qi = 0;
@@ -886,9 +886,6 @@ public:
 
 	Sol & solution(Long_I treeInd = -1)
 	{ return node(def(treeInd)).m_sol; }
-
-	inline Int territory2(Long_I treeInd = -1) const // territory times 2
-	{ Long treeInd1 = def(treeInd); return get_board(treeInd1).territory2(who(treeInd1)); }
 
 	// set default argument treeInd
 	Long def(Long_I treeInd) const
@@ -1393,7 +1390,7 @@ void Tree::calc_sol(Long_I treeInd)
 void Tree::calc_territory(Long_I treeInd = -1) // calculate territory and save to m_territory2
 {
 	Long treeInd1 = def(treeInd);
-	node(treeInd1).m_territory2 = get_board(def(treeInd1)).territory2(who(treeInd1));
+	node(treeInd1).m_territory2 = get_board(def(treeInd1)).calc_territory2(who(treeInd1));
 }
 
 // initialize class static members
