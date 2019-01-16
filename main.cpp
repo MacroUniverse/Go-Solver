@@ -989,13 +989,13 @@ inline Int Tree::check(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 	const Long treeInd1 = def(treeInd);
 	Node node;
 	Board board;
-	board = get_board();
+	board = get_board(treeInd1);
 	// first move
 	if (treeInd1 == 0)
 		return 0;
 
 	// update board and check illegal move (Ko no checked!)
-	return board.check(x, y, ::next(who()));
+	return board.check(x, y, ::next(who(treeInd1)));
 }
 
 // return 0 if new node created (m_treeInd++)
@@ -1032,12 +1032,12 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 	ret = check_ko(search_ret, treeInd_ko, orderInd, treeInd1, board);
 	if (ret < 0) { // board already exists
 		if (ret == -1) { // not a ko
-			node.push_next(treeInd_ko);
+			m_nodes[treeInd1].push_next(treeInd_ko);
 			if (treeInd < 0) m_treeInd = treeInd_ko;
 			return 1;
 		}
 		else if (ret == -2) { // is a ko
-			node.push_next(-treeInd_ko - 1);
+			m_nodes[treeInd1].push_next(-treeInd_ko - 1);
 			return -2;
 		}
 	}
@@ -1063,14 +1063,15 @@ inline Int Tree::islinked(Long_I treeInd1, Long_I treeInd2)
 	Long i, treeInd = treeInd2;
 	for (i = 0; i < 10000; ++i) {
 		if (m_nodes[treeInd].nlast() > 1) break; // multiple upward fork
-		if (treeInd == treeInd2) return 1; // found treeInd2
-		if (m_nodes[treeInd].last(0) == -1) return 0; // reached top of tree
+		if (treeInd == treeInd1) return 1; // found treeInd2
+		if (treeInd == 0) return 0; // reached top of tree
 		treeInd = m_nodes[treeInd].last(0); // single line, go up
 	}
 	for (i = 0; i < m_nodes[treeInd].nlast(); ++i) {
 		if (islinked(treeInd1, last(treeInd, i)) == 1)
 			return 1;
 	}
+	error("should not reach here!"); return 0;
 }
 
 // 'nodes[treeInd]' will produce 'board' in the next move
@@ -1164,6 +1165,7 @@ Int Tree::rand_move(Long_I treeInd /*optional*/)
 // return 0 if successful and new node created
 // return 1 if linked to existing node and no Ko
 // return 2 if linked to existing node and has Ko
+// return 3 if sucessful but is a dumb move
 // return -1 if there is all legal moves already exists
 // return -2 if passed and game ends
 Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
@@ -1183,7 +1185,7 @@ Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 	for (i = 0; i < Nxy; ++i) {
 		x = xy[i] % Nx; y = xy[i] / Nx;
 		// check existence
-		if (next_exist(Move(x, y)))
+		if (next_exist(Move(x, y), treeInd1))
 			continue;
 		// check legal and number of removal
 		ret = check(x, y, treeInd1);
@@ -1220,7 +1222,7 @@ Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 	for (i = 0; i < Nxy; ++i) {
 		x = xy[i] % Nx; y = xy[i] / Nx;
 		if (place(x, y) < 0) continue;
-		else return 1;
+		else return 3;
 	}
 
 	return -1; // all leagl moves already exist
@@ -1316,10 +1318,15 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 	// enumerate children
 	for (i = 0; i < 1000; ++i) {
 		ret = rand_smart_move(treeInd1);
-		if (ret == 0 || ret == 1) {
+		if (ret == 0 || ret == 1 || ret == 3) {
 			// new node created (might be a first pass)
-			if (ret == 0) {
+			if (ret == 0 || ret == 3) {
 				child_treeInd = nnode() - 1;
+				// debug, display board
+				cout << "largest treeInd = " << nnode() - 1 << endl;
+				disp_board(nnode() - 1); cout << "\n\n" << endl;
+				cout << "";
+				// end debug
 			}
 			// linked to existing node, no Ko
 			else if (ret == 1)
@@ -1373,6 +1380,10 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 		// new pass node created, double pass caused end of game
 		else if (ret == -2) {
 			// child is already solved by game result
+			// debug, display board
+			cout << "largest treeInd = " << nnode() - 1 << endl;
+			disp_board(nnode() - 1); cout << "\n\n" << endl;
+			// end debug
 			child_treeInd = nnode() - 1;
 			if (best_child_sco2(treeInd1) < score2(child_treeInd)) {
 				best_child_sco2(treeInd1) = score2(child_treeInd);
@@ -1622,22 +1633,14 @@ int main()
 	// computer_vs_computer_ui();
 	// human_vs_computer_ui();
 	// human_vs_human_ui();
-	
-	Int Nx, Ny, ret, i = 0, bscore4, x, y;
-	Doub komi;
-	Char color;
 
 	board_Nx(3); board_Ny(3); // set board size
-	komi2(18); // set koomi
+	komi2(17); // set koomi
 	Tree tree;
 
 	// debug: edit board here
 	tree.place(1, 1);
 	// end edit board
-
-	i = 0;
-	cout << "\n\nstep " << i << " "; ++i;
-	tree.disp_board();
 
 	tree.solve();
 }
