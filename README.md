@@ -2,11 +2,11 @@
 Solving the game of Go by analyzing the game tree.
 
 ## Introduction
-Game of Go (Chinese: weiqi 围棋) is a board game. According to game theory, with the fair komi (an integer), a draw strategy is guaranteed to exists, with an unfair komi, a winning strategy is guaranteed to exist for the advantageous side. The mind that knows these strategies is called God of Go (or god).
+Game of Go (Chinese: weiqi 围棋) is a board game. According to game theory, with the fair komi (贴目, an integer), a draw strategy is guaranteed to exists, with an unfair komi, a winning strategy is guaranteed to exist for the advantageous side. The mind that knows these strategies is called God of Go (or god).
 
 The fair komi is currently only known for very small boards by human, the largest board is 7 by 7, calculated by Go experts, but with no rigorous proof. The largest board proven by computer is 5 by 5.
 
-The game tree of Go reveals all possibilities of a game. The tree is composed of connected nodes, each node represents a status of the board. The node at the top of the game tree represents an empty board, and a node at the bottom of the tree represents status of the board when the game ends. A node may connect to multiple lower nodes (child nodes), but it can only connect to one parent node (the node that leads to it). Sibling nodes are the nodes that share the same parents.
+The game tree of Go reveals all possibilities of a game. The tree is composed of connected nodes, each node represents a status of the board. The node at the top of the game tree represents an empty board, and a node at the bottom of the tree represents configuration of the board when the game ends. A node may connect to multiple lower nodes (child nodes), but it can only connect to one parent node (the node that leads to it). Sibling nodes are the nodes that share the same parents.
 
 Let's assume that two gods play the game starting from a given node in the tree with a given komi. According to game theory, if this is fair, the game will end with a draw, if this is unfair, the advantageous side is guaranteed to win.
 
@@ -21,6 +21,11 @@ Thus the most efficient algorithm will depend on how well another program can pl
 With a slightly different implementation, it's possible to solve a node without knowning the komi apriori (to distinguish, we call this scoring). Instead of deciding the solution (good/bad/fair) of a node directly, we can give it a score: the final score of the current player without komi (if two players are both god, and always choose the best scored move). It doesn't matter how this score is calculated (Chinese rule, Japanese rule, etc.). To socre a node, we must find the best scored child, and the score of the node will the the complementary (opponent's score for the same board configuration) score of it's best child. Whenever a komi is chosen, the solution for any solved node can be immediately calculated by a simple addition/subtraction.
 
 However, this will require much more calculation because to score a node, all it's children must be scored. A compromise between solving and scoring will be to set a reasonable komi first, solve the given node and score it from the solved children, since probably not all children are solved, the score might be over estimated. If another komi is needed later, we might only need to score a few additional children of each node instead of starting all-over again or scoring all children.
+
+## Equivalent Board Configurations (TODO)
+* For square board, there are 4 different orientations of the board.
+* For rectangle board, there are 2 different orientations of the board.
+* Inversing color of all stones can also be considered equivalent.
 
 ## Node Implementation
 Since there might be two different nodes in the tree that have the same board configuration, in the program, they are combined as a single node, and all nodes are allowed to link to multiple parents as well as multiple children. So a `Node` object has the following important data members:
@@ -46,12 +51,11 @@ Since there might be two different nodes in the tree that have the same board co
 * a vector container storing the order of the boards in the pool so that a board can be found quickly in the pool. This vector is updated when a new board is pushed to the pool.
 
 ## Ko Complication
-If neither ko nor upward fork is considered, the above algorithm for solving a node can be implemented easily with a recursive function `Sol Tree::solve(treeInd)`, which tries to solve a node's children one by one, by calling `solve()` itself. The end node is automatically solved when it is born (by `Tree::pass()`).
+If neither ko (打劫) nor upward fork is considered, the above algorithm for solving a node can be implemented easily with a recursive function `Sol Tree::solve(treeInd)`, which tries to solve a node's children one by one, by calling `solve()` itself. The end node is automatically solved when it is born (by `Tree::pass()`).
 
 However, when a ko is found and current node linked to an upstream node called ko node (linking will update the `m_next` member of the current node, but will not update `m_last` of the ko node), `solve()` will recur infinitely. To prevent this, after a ko is linked, `solve()` will push the link destination using `Tree::m_ko_treeInds.push_back()`, and keep solving other children. If a `GOOD` child is found, then the ko link will be discarded and the current solution will be `BAD`. If not, after all children are searched, `solve()` updates `Tree::m_ko_best` using the best solved child, and sets the solution to `KO_ONLY` then return failure. When the calling `solve()` sees that failure, it will search the elements `Tree::m_ko_treeInds[]` to see if any leads to the current node and remove the matching elements. If `Tree::m_ko_treeInds` becomes empty, the solution is the opposite of `Tree::m_ko_best`. If it's not empty, `solve()` will keep solving other children. If a `GOOD` child is found, the current solution will be `BAD`. If another ko is linked, push to `Tree::m_ko_treeInds` and keep solving other children, after all children are searched, `solve()` updates `Tree::m_ko_best`, and sets the solution to `KO_ONLY` then return failure.
-
 
 ## GNU go
 GNU go can play 5x5 to 19x19 boards. So it might be used to guess the best child for these boards. Another advantage is it might be written in c.
 
-Other things like mini-go probably requires some training.
+Other projects such as mini-go probably requires some training.

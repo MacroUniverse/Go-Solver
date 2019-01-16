@@ -850,7 +850,11 @@ public:
 	
 	inline void branch(vector<Long> &br, Long_I treeInd = -1); // get an index vector of the a branch ending at a node
 
-	inline void writeSGF(const string &name);
+	inline void writeSGF_old(const string &name); // write a branch to file
+
+	inline void writeSGF(const string &name); // write the whole tree to file
+
+	inline void writeSGF0(ofstream &fout, Long_I treeInd = -1); // internal function called by writeSGF();
 
 	inline Bool next_exist(Move mov, Long_I treeInd = -1); // does next node have this mov already?
 
@@ -1109,7 +1113,7 @@ inline void Tree::branch(vector<Long> &br, Long_I treeInd /*optional*/)
 	}
 }
 
-inline void Tree::writeSGF(const string &name)
+inline void Tree::writeSGF_old(const string &name)
 {
 	Char Nx = board_Nx(), Ny = board_Ny();
 	ofstream fout(name);
@@ -1140,6 +1144,85 @@ inline void Tree::writeSGF(const string &name)
 	}
 	fout << ")\n";
 	fout.close();
+}
+
+inline void Tree::writeSGF(const string &name)
+{
+	Char Nx = board_Nx(), Ny = board_Ny();
+	ofstream fout(name);
+	fout << "(\n";
+	fout << "  ;GM[1]FF[4]CA[UTF-8]AP[]KM[0]";
+
+	// board size
+	if (Nx == Ny)
+		fout << "SZ[" << Int(Nx) << "]";
+	else
+		fout << "SZ[" << Int(Nx) << ":" << Int(Ny) << "]";
+	fout << "DT[]\n";
+
+	// write a branch
+	Char BW; // letter B or letter W
+	Int i; Char x, y;
+	
+
+	for (i = 1; i < br.size(); ++i) {
+		// black moves
+		fout << ";" << BW;
+		Node & node = m_nodes[br[i]];
+		if (node.ispass()) // pass
+			fout << "[]\n";
+		else
+			fout << '[' << char('a' + node.x()) << char('a' + node.y()) << "]\n";
+		BW = BW == 'B' ? 'W' : 'B';
+	}
+	fout << ")\n";
+	fout.close();
+}
+
+inline void Tree::writeSGF0(ofstream &fout, Long_I treeInd)
+{
+	Char BW; // letter B or letter W
+	Int i, nnext;
+	Long treeInd1 = def(treeInd), treeInd2;
+	if (who(treeInd1) == Who::BLACK)
+		BW = 'B';
+	else if (who(treeInd1) == Who::WHITE)
+		BW = 'W';
+	else
+		error("illegal stone color");
+
+	// write one node
+	Node & node = m_nodes[treeInd1];
+	nnext = node.nnext();
+	fout << ";" << BW;
+	if (node.ispass()) // pass
+		fout << "[]\n";
+	else
+		fout << '[' << char('a' + node.x()) << char('a' + node.y()) << "]\n";
+	BW = BW == 'B' ? 'W' : 'B';
+
+	// do down the tree
+	for (i = 0; i < 10000; ++i) {
+		nnext = m_nodes[treeInd1].nnext();
+		if (nnext == 1) {
+			treeInd2 = m_nodes[treeInd1].next(i);
+			Node & node = m_nodes[treeInd2];
+			fout << ";" << BW;
+			if (node.ispass()) // pass
+				fout << "[]\n";
+			else
+				fout << '[' << char('a' + node.x()) << char('a' + node.y()) << "]\n";
+			BW = BW == 'B' ? 'W' : 'B';
+			if (treeInd2 != treeInd1 + 1)
+				return; // reached a link to an existing node
+			treeInd1 = treeInd2;
+		}
+		else if (nnext == 0)
+			return;
+		else if (nnext > 1) {
+			break; // reached downward fork
+		}
+	}
 }
 
 inline Bool Tree::next_exist(Move mov, Long_I treeInd /*optional*/)
