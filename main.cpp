@@ -1171,7 +1171,6 @@ inline void Tree::writeSGF(const string &name)
 		error("writeSGF() nodes number does not match!");
 	
 	fout << ")\n";
-	fout.flush(); // debug
 	fout.close();
 }
 
@@ -1201,8 +1200,6 @@ inline Long Tree::writeSGF0(ofstream &fout, Long_I treeInd)
 			Node & node = m_nodes[treeInd1];
 			
 			writeSGF01(fout, treeInd1); ++count;
-
-			fout.flush(); // debug
 		}
 		else if (nnext == 0)
 			return count;
@@ -1214,9 +1211,14 @@ inline Long Tree::writeSGF0(ofstream &fout, Long_I treeInd)
 	// write downward branches
 	for (i = 0; i < nnext; ++i) {
 		fout << '(';
-		count += writeSGF0(fout, m_nodes[treeInd1].next(i));
+		treeInd2 = m_nodes[treeInd1].next(i);
+		if (treeInd2 < 0)
+			error("unhandled case"); // game ends or ko!
+		if (treeInd2 != treeInd1 + 1)
+			continue; // reached a link to an existing node
+		else
+			count += writeSGF0(fout, m_nodes[treeInd1].next(i));
 		fout << ')';
-		fout.flush(); // debug
 	}
 	return count;
 }
@@ -1253,15 +1255,17 @@ inline void Tree::writeSGF01(ofstream &fout, Long_I treeInd1)
 
 	// add green (black wins) or blue (white wins) mark
 	if (winner(treeInd1) == Who::BLACK)
-		fout << "TE[1]\n"; // green
+		fout << "TE[1]"; // green
 	else if (winner(treeInd1) == Who::WHITE)
-		fout << "IT[]\n"; // blue
+		fout << "IT[]"; // blue
 	else if (winner(treeInd1) == Who::DRAW)
 		error("TODO...");
 	else if (winner(treeInd1) == Who::NONE)
 		;
 	else
 		error("???");
+
+	fout << "\n";
 }
 
 inline Bool Tree::next_exist(Move mov, Long_I treeInd /*optional*/)
@@ -1441,8 +1445,8 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 	for (i = 0; i < 1000; ++i) {
 		ret = rand_smart_move(treeInd1);
 		// debug
-		if (nnode() > 101) {
-			writeSGF("test.sgf"); exit(EXIT_SUCCESS);
+		if (nnode() == 117) {
+			writeSGF("test.sgf");
 		}
 		// end debug
 		if (ret == 0 || ret == 1 || ret == 3) {
@@ -1452,7 +1456,7 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 				// debug, display board
 				cout << "largest treeInd = " << nnode() - 1 << endl;
 				disp_board(nnode() - 1); cout << "\n\n" << endl;
-				cout << "";
+				cout << ""; // debug break point
 				// end debug
 			}
 			// linked to existing node, no Ko
@@ -1471,7 +1475,7 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 				if (best_child_sol(treeInd1) == Sol::GOOD) {
 					solution(treeInd1) = Sol::BAD;
 					score2(treeInd1) = comp_score2(best_child_sco2(treeInd1));
-					return 0;
+					return 0; // debug break point
 				}
 			}
 		}
@@ -1495,13 +1499,13 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 					solution(treeInd1) = Sol::GOOD;
 					score2(treeInd1) = comp_score2(best_child_sco2(treeInd1));
 				}
-				return 0;
+				return 0; // debug break point
 			}
 			// not all children solved
 			else {
 				solution(treeInd1) = Sol::KO_ONLY;
 				score2(treeInd1) = comp_score2(best_child_sco2(treeInd1));
-				return -1;
+				return -1; // debug break point
 			}
 		}
 		// new pass node created, double pass caused end of game
@@ -1511,14 +1515,14 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 			cout << "largest treeInd = " << nnode() - 1 << endl;
 			disp_board(nnode() - 1); cout << "\n\n" << endl;
 			// end debug
-			child_treeInd = nnode() - 1;
+			child_treeInd = nnode() - 1; // debug break point
 			if (best_child_sco2(treeInd1) < score2(child_treeInd)) {
 				best_child_sco2(treeInd1) = score2(child_treeInd);
 				best_child_sol(treeInd1) = solution(child_treeInd);
 				if (best_child_sol(treeInd1) == Sol::GOOD) {
 					solution(treeInd1) = Sol::BAD;
 					score2(treeInd1) = comp_score2(best_child_sco2(treeInd1));
-					return 0;
+					return 0; // debug break point
 				}
 			}
 		}
