@@ -12,6 +12,17 @@ Let's assume that two gods play the game starting from a given node in the tree 
 
 The current objective of this project is to decide, for a given node and given komi, whether it is fair, and which side is advantageous (i.e. solving that node). Apparently, the closer the node is to the bottom, the easier it can be solved.
 
+## Equivalent Board Configurations
+* A board configuration specifies the positions of two kinds of stones on the board.
+* Rotating the board does not change the configuration (square board can rotate 3 times and rectangle board 1 time).
+* Inversing color of all stones does not change the configuration.
+* For the same configuration, the solution depends on the player that leads to this configuration.
+* A board configuration corresponds to two situations.
+* A situation is a configuration with a specified player.
+* A situation only have one solution (despite of ko).
+* each node must have a unique situation, otherwise they should be combined.
+* two nodes linked by a pass must corresponds to the two situations of one configuration.
+
 ## Algorithm
 The solution of a given node (good/bad/fair for the one who played this node) is the opposite of the solution of it's best (good better than fair better than bad) child played by opponent, if the best child is good (i.e. at least a good child exists) then this node is bad. Otherwise, if the best children is fair, then this node is also fair. If the best child is bad (i.e. all children are bad), this node is good.
 
@@ -21,11 +32,6 @@ Thus the most efficient algorithm will depend on how well another program can pl
 With a slightly different implementation, it's possible to solve a node without knowning the komi apriori (to distinguish, we call this scoring). Instead of deciding the solution (good/bad/fair) of a node directly, we can give it a score: the final score of the current player without komi (if two players are both god, and always choose the best scored move). It doesn't matter how this score is calculated (Chinese rule, Japanese rule, etc.). To socre a node, we must find the best scored child, and the score of the node will the the complementary (opponent's score for the same board configuration) score of it's best child. Whenever a komi is chosen, the solution for any solved node can be immediately calculated by a simple addition/subtraction.
 
 However, this will require much more calculation because to score a node, all it's children must be scored. A compromise between solving and scoring will be to set a reasonable komi first, solve the given node and score it from the solved children, since probably not all children are solved, the score might be over estimated. If another komi is needed later, we might only need to score a few additional children of each node instead of starting all-over again or scoring all children.
-
-## Equivalent Board Configurations (TODO)
-* For square board, there are 4 different orientations of the board.
-* For rectangle board, there are 2 different orientations of the board.
-* Inversing color of all stones can also be considered equivalent.
 
 ## Node Implementation
 Since there might be two different nodes in the tree that have the same board configuration, in the program, they are combined as a single node, and all nodes are allowed to link to multiple parents as well as multiple children. So a `Node` object has the following important data members:
@@ -41,7 +47,8 @@ Since there might be two different nodes in the tree that have the same board co
 * a `Pool` object that stores every distinct board configuration (the `Board` object) that appeards in the tree.
 
 ## Board Implementation
-`Board` object important data members:
+`Board` object specifies the board configuration, not situation.
+Important data members:
 * a fixed size matrix container for `Who` objects, can be either `BLACK`, `WHITE` or `NONE`, storing the board configuration.
 
 ## Pool Implementation

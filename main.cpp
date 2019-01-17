@@ -18,7 +18,7 @@ using std::vector; using std::string;
 using std::ofstream; using std::cout;
 using std::cin; using std::endl;
 
-enum class Who : Char { NONE, BLACK, WHITE, DEFAULT, DRAW }; // TODO: make this a char type
+enum class Who : Char { NONE, WHITE, BLACK, DEFAULT, DRAW }; // TODO: make this a char type
 typedef const Who Who_I;
 
 enum class Act : Char { PLACE, PASS, EDIT, INIT }; // TODO: make this a char type
@@ -27,6 +27,17 @@ typedef const Act Act_I;
 enum class Sol : Char { BAD, FAIR, GOOD, UNKNOWN, KO_ONLY };
 typedef const Sol Sol_I;
 
+// convert who to integer
+Int who2int(Who_I who)
+{
+	if (who == Who::NONE)
+		return 0;
+	if (who == Who::BLACK)
+		return 2;
+	if (who == Who::WHITE)
+		return 1;
+	error("illegal who!");
+}
 
 // inverse color
 inline Who next(Who_I s)
@@ -191,22 +202,6 @@ inline void Move::place(Char_I x, Char_I y)
 	m_x = x; m_y = y;
 }
 
-// element type of Node::m_last;
-class Parent : public Move
-{
-public:
-	Long m_treeInd;
-	Parent(const Move &mov, Long_I treeInd): Move(mov), m_treeInd(treeInd) {}
-	// properties
-	using Move::isplace;
-	using Move::ispass;
-	using Move::isedit;
-	using Move::isinit;
-	using Move::type;
-	using Move::x;
-	using Move::y;
-};
-
 // a node in the game tree
 // a fork index (forkInd) is an index for m_last or m_next
 // Move is the move that caused the current board
@@ -214,8 +209,9 @@ class Node
 {
 private:
 	Who m_who; // who's turn is this?
-	vector<Parent> m_last; // -1: first node
 	vector<Long> m_next; // -1: end node
+	vector<Long> m_last; // for 0-th node: undefined
+	vector<Move> m_last_mov; // moves of m_last that leads to this node
 	Long m_poolInd; // pool index, board stored in Pool::m_board[m_pool_ind]
 public:
 	// solution related
@@ -230,17 +226,31 @@ public:
 	// properties
 	// const Move & move() const { return *this; }
 	Who who() const { return m_who; }
+	Bool isinit() const { return m_last_mov[0].isinit(); }
+	Bool ispass(Int_I forkInd = 0) const { return m_last_mov[forkInd].ispass(); }
+	Bool isedit(Int_I forkInd = 0) const { return m_last_mov[forkInd].isedit(); }
+	Bool isplace(Int_I forkInd = 0) const { return m_last_mov[forkInd].isplace(); }
+	Bool x(Int_I forkInd = 0) const { return m_last_mov[forkInd].x(); }
+	Bool y(Int_I forkInd = 0) const { return m_last_mov[forkInd].y(); }
+	Move move(Int_I forkInd = 0) const // get the move that leads to this node
+	{ return m_last_mov[forkInd]; }
+	Int parent(Long_I treeInd) const; // search a parent by tree index
 	Long poolInd() const { return m_poolInd; }
 	Int nlast() const { return m_last.size(); }
-	Long last(Int_I ind) const { return m_last[ind].m_treeInd; }
+	Long last(Int_I ind) const { return m_last[ind]; }
 	Int nnext() const { return m_next.size(); }
 	inline Long next(Int_I ind) const; // tree index for a child
 	inline Bool isend() const; // is this a bottom node (end of game)?
 	inline Bool is_next_ko(Int_I ind) const; // is this a ko link?
 
 	// set
-	void init(Long_I poolInd) { m_last.resize(0); m_last.push_back(Parent(Move(Act::INIT), -1)); m_who = Who::NONE; m_poolInd = poolInd; }
-	void push_last(const Move &mov, Long_I treeInd) { m_last.push_back(Parent(mov, treeInd)); }
+	void init(Long_I poolInd)
+	{
+		m_last.resize(0); m_last.push_back(-1); m_last_mov.push_back(Move(Act::INIT));
+		m_who = Who::NONE; m_poolInd = poolInd;
+	}
+
+	void push_last(const Move &mov, Long_I treeInd) { m_last.push_back(treeInd); m_last_mov.push_back(mov); }
 	void push_next(Long_I treeInd) { m_next.push_back(treeInd); }
 
 	void place(Char_I x, Char_I y, Who_I who, Long_I treeInd, Long_I poolInd) // already has bound checking
@@ -251,6 +261,14 @@ public:
 
 	~Node() {}
 };
+
+// assuming the parents are in order
+Int Node::parent(Long_I treeInd) const
+{
+	Long forkInd;
+	lookupInt(forkInd, m_last, treeInd);
+	return forkInd;
+}
 
 // ind = -1 : last element, ind = -2 : second last element, etc.
 Long Node::next(Int_I ind) const
@@ -296,7 +314,8 @@ inline Bool Node::is_next_ko(Int_I ind) const
 class Board;
 typedef const Board Board_I;
 
-// status of the board
+// board configuration, not situation
+// a board not processed by a transformation is called a raw board (raw_board), make this clear in function arguments!
 // TODO: implement operator << for move
 // TODO: use a better comparation rule so that rotations of a board are considered equal, otherwise unequal
 class Board
@@ -369,14 +388,126 @@ inline void Board::disp() const
 	}
 }
 
-// imagine Board::m_data as a long integer, try to compare two integers
-inline Bool operator<(Board_I &board1, Board_I &board2)
+// decide the best transformations (rotation and stone color flipping) to make a configuration "largest"
+// NONE:0 < WHITE:1 < BLACK:2
+// return true: if needs to flip
+// return false: if no need to flip
+// output rot: times the board needs to rotate counter-clockwise
+Bool calc_rot_flip_board(Int_O &rotation, Board_I &board)
 {
-	Int i, N = board_Nx() * board_Ny();
-	for (i = 0; i < N; ++i) {
-		if (board1.m_data(i) == board2.m_data(i)) continue;
-		if (board1.m_data(i) < board2.m_data(i)) return true;
-		return false;
+	Char x, y;
+	Int i, Nx = board_Nx(), Ny = board_Ny(), N = Nx * Ny, best;
+	vector<Int> val, rot;
+	vector<Bool> flip;
+
+	// square board (4 rotations)
+	if (Nx == Ny) {
+		flip.resize(8); rot.resize(8); val.resize(8);
+	}
+	else {
+		flip.resize(4); rot.resize(4); val.resize(4);
+	}
+
+	// check board coordinates in row-major order
+	for (y = 0; y < Ny; ++y) {
+		for (x = 0; x < Nx; ++x) {
+			if (Nx == Ny) {
+				flip[0] = false; rot[0] = 0;
+				flip[1] = false; rot[1] = 1;
+				flip[2] = false; rot[2] = 2;
+				flip[3] = false; rot[3] = 3;
+				flip[4] = true;  rot[4] = 0;
+				flip[5] = true;  rot[5] = 1;
+				flip[6] = true;  rot[6] = 2;
+				flip[7] = true;  rot[7] = 3;
+			}
+			else {
+				flip[0] = false; rot[0] = 0;
+				flip[1] = false; rot[1] = 2;
+				flip[2] = true;  rot[2] = 0;
+				flip[3] = true;  rot[3] = 2;
+			}
+
+			// evaluate (x, y) position for all transformations left
+			best = 0;
+			for (i = 0; i < val.size(); ++i) {
+				val[i] = who2int(transform1(x, y, rot[i], flip[i], board));
+				if (best < val[i])
+					best = val[i];
+			}
+
+			// only keep the best transformations
+			for (i = 0; i < val.size(); ++i) {
+				if (val[i] < best) {
+					flip.erase(flip.begin() + i);
+					rot.erase(rot.begin() + i);
+					val.erase(val.begin() + i);
+				}	
+			}
+
+			// only one transformations left
+			if (val.size() == 1) {
+				rotation = rot[0];
+				return flip[0];
+			}
+		}
+	}
+
+	// multiple rot/flip combinations, return the first
+	rotation = rot[0];
+	return flip[0];
+}
+
+// get a stone after the board has been rotated and fliped
+Who transform1(Char_I x, Char_I y, Int_I rot, Bool_I flip, Board_I &board)
+{
+	Char x1, y1;
+	Who stone;
+	if (rot == 0) {
+		x1 = x; y1 = y;
+	}
+	else if (rot == 1) {
+		x1 = -y; y1 = x;
+	}
+	else if (rot == 2) {
+		x1 = -x; y1 = -y;
+	}
+	else if (rot == 3) {
+		x1 = y; y1 = -x;
+	}
+	else
+		error("illegal rotation!");
+
+	stone = board.m_data(x1, y1);
+	if (flip) {
+		if (stone == Who::WHITE)
+			return Who::BLACK;
+		if (stone == Who::BLACK)
+			return Who::WHITE;
+	}
+}
+
+// compare two boards
+// return 1: board > board_raw
+// return 0: board == board_raw
+// return -1: board < board_raw
+// transformation will be performed on "board_raw", but not "board"
+Int operator-(Board_I &board, Board_I &board_raw)
+{
+	// rotation and inversion should make the board compare as big as possible
+	Char x, y;
+	Int rotation, Nx = board_Nx(), Ny = board_Ny(), N = Nx * Ny;
+	Int val, val_raw;
+	Bool flip = calc_rot_flip_board(rotation, board_raw);
+
+	for (y = 0; y < Ny; ++y) {
+		for (x = 0; x < Nx; ++x) {
+			val = who2int(board.m_data(x, y));
+			val_raw = who2int(transform1(x, y, rotation, flip, board_raw));
+			if (val == val_raw) continue;
+			if (val > val_raw) return 1;
+			return -1;
+		}
 	}
 	return false;
 }
@@ -798,7 +929,8 @@ class Pool
 {
 public:
 	vector<Board> m_boards; // store all boards in the Pool
-	vector<Long> m_treeInd;  // m_treeInd[i] is the index of m_boards[i] in the game tree
+	vector<Long> m_black_treeInd; // the corresponding node played by black
+	vector<Long> m_white_treeInd; // the corresponding node played by white
 	vector<Long> m_order; // m_board[m_order[i]] is in sorted order
 
 	Pool() {}
@@ -808,19 +940,19 @@ public:
 	// get a board by index
 	const Board & operator[](Long_I ind) const { return m_boards[m_order[ind]]; }
 
-	// search Pool: find ind so that *this[ind] == board
+	// search Pool: find poolInd so that m_board[poolInd] and raw_board have the same configuration
 	// TODO: improve implementation (stone by stone algorithm)
-	Int search(Long_O &treeInd, Long_O &orderInd, Board_I &board);
+	Int search(Long_O &poolInd, Long_O &orderInd, Board_I &raw_board);
 
 	// add a new board to the Pool
 	inline void push(Board_I &board, Int_I search_ret, Long_I orderInd, Long_I treeInd);
 };
 
-Int Pool::search(Long_O &treeInd_same, Long_O &orderInd, Board_I &board)
+Int Pool::search(Long_O &poolInd, Long_O &orderInd, Board_I &raw_board)
 {
-	Int ret = lookupInt(orderInd, *this, board);
+	Int ret = lookupInt(orderInd, *this, raw_board);
 	if (ret == 0)
-		treeInd_same = m_treeInd[m_order[orderInd]];
+		poolInd = m_order[orderInd];
 	return ret;
 }
 
@@ -882,6 +1014,9 @@ public:
 	inline const Node & node(Long_I treeInd = -1) const // return a reference of a node
 	{ return m_nodes[def(treeInd)]; }
 
+	inline Int nlast(Long_I treeInd = -1) const
+	{ return m_nodes[def(treeInd)].nlast(); }
+
 	inline Long last(Long_I treeInd = -1, Int_I forkInd = 0) const; // return an index of the last node of a node
 
 	const Node & lastNode(Long_I treeInd = -1, Int_I forkInd = 0) // return a reference of the last node of a node
@@ -890,8 +1025,14 @@ public:
 	// return an index of the next node of a node, fork can be negative
 	inline Long next(Long_I treeInd = -1, Int_I forkInd = 0) const;
 
-	const Node & nextNode(Long_I treeInd = -1, Int_I forkInd = 0) // return a reference of the next node of a node
+	const Node & nextNode(Long_I treeInd = -1, Int_I forkInd = 0) const // return a reference of the next node of a node
 	{ return m_nodes[next(treeInd, forkInd)]; } // forkInd can be negative
+
+	const Move & nextMove(Long_I treeInd = -1, Int_I forkInd = 0) const // return next move of a node
+	{
+		const Node & next_node = nextNode(treeInd, forkInd);
+		return next_node.move(next_node.parent(treeInd));
+	}
 
 	Who who(Long_I treeInd = -1) const // who played the node
 	{ return m_nodes[def(treeInd)].who(); }
@@ -907,7 +1048,7 @@ public:
 	inline Int islinked(Long_I treeInd1, Long_I treeInd2); // check if node treeInd1 can lead to node treeInd2
 
 	// check if same board already exists in the Pool and decide if it is a Ko
-	inline Int check_ko(Int_O &search_ret, Long_O &treeInd_same, Long_O &orderInd, Long_I treeInd, Board_I &board);
+	inline Int check_ko(Int_O &search_ret, Long_O &treeInd_match, Long_O &orderInd, Long_I treeInd, Board_I &board);
 	
 	inline void branch(vector<Long> &br, Long_I treeInd = -1); // get an index vector of the a branch ending at a node
 
@@ -1024,24 +1165,27 @@ inline Long Tree::next(Long_I treeInd /*optional*/, Int_I forkInd /*optional*/) 
 inline void Tree::disp_board(Long_I treeInd /*optional*/) const
 {
 	Char x, y;
+	Int i;
 	Long treeInd1 = def(treeInd);
 	const Node & node = m_nodes[treeInd1];
-	if (node.isinit())
-		cout << "(empty)";
-	else {
-		if (who(treeInd1) == Who::BLACK)
-			cout << "(black ";
-		else if (who(treeInd1) == Who::WHITE)
-			cout << "(white ";
-		else
-			error("Tree:disp(): illegal side name!");
+	for (i = 0; i < nlast(treeInd1); ++i) {
+		if (node.isinit())
+			cout << "(empty)";
+		else {
+			if (who(treeInd1) == Who::BLACK)
+				cout << "(black ";
+			else if (who(treeInd1) == Who::WHITE)
+				cout << "(white ";
+			else
+				error("Tree:disp(): illegal side name!");
 
-		if (node.ispass())
-			cout << "pass)";
-		else if (node.isedit())
-			cout << "edit board)";
-		else
-			cout << "[" << Int(node.x()) << "," << Int(node.y()) << "] )";
+			if (node.ispass(i))
+				cout << "pass)";
+			else if (node.isedit(i))
+				cout << "edit board)";
+			else
+				cout << "[" << Int(node.x(i)) << "," << Int(node.y(i)) << "] )";
+		}
 	}
 	
 	cout << "\n";
@@ -1049,23 +1193,18 @@ inline void Tree::disp_board(Long_I treeInd /*optional*/) const
 	cout << '\n' << endl;
 };
 
-// return -1 if game ends, 0 if not
+// no need to check double pass, it will be handled as a ko
 inline Int Tree::pass(Long_I treeInd /*optional*/)
 {
+	// check ko
+	...
+	// new configuration
 	Node node;
 	const Long treeInd1 = def(treeInd);
 	node.pass(::next(who(treeInd1)), treeInd1, m_nodes[treeInd1].poolInd());
 	m_nodes.push_back(node);
 	m_nodes[treeInd1].push_next(nnode()-1);
-	// check double pass (game ends)
-	if (m_nodes[treeInd1].ispass()) {
-		m_nodes[nnode() - 1].push_next(-1);
-		// check result
-		solve_end(nnode() - 1);
-		return -1;
-	}
 	if(treeInd < 0) ++m_treeInd;
-	return 0;
 }
 
 // check if a placing is legal, or how many stones will be dead
@@ -1172,17 +1311,18 @@ inline Int Tree::islinked(Long_I treeInd1, Long_I treeInd2)
 
 // 'nodes[treeInd]' will produce 'board' in the next move
 // if board already exists, output tree index of the same board
-// return 0 if board is new
+// return 0 if this is a new configuration, otherwise:
 // return -1 if it is not a ko
 // return -2 if a ko is found
-// return -3 if board exist but player is different (solution/score not the same!)
-// (in case of multiple upward fork, there might be no ko for some branches!)
-inline Int Tree::check_ko(Int_O &search_ret, Long_O &treeInd_same, Long_O &orderInd, Long_I treeInd, Board_I &board)
+// return -3 if this is a new situation
+inline Int Tree::check_ko(Int_O &search_ret, Long_O &treeInd_match, Long_O &orderInd, Long_I treeInd, Board_I &board)
 {
-	search_ret = m_pool.search(treeInd_same, orderInd, board);
+	Long poolInd;
+	search_ret = m_pool.search(poolInd, orderInd, board);
+	treeInd_match = m_pool.treeInd(poolInd, who(treeInd));
 	// board already exists
 	if (search_ret == 0) {
-		if (who(treeInd_same) == who(treeInd))
+		if (who(treeInd_match) == who(treeInd))
 			return -3;
 		if (islinked(treeInd_same, treeInd))
 			return -2; // Ko!
@@ -1557,7 +1697,7 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 	for (i = 0; i < 1000; ++i) {
 		ret = rand_smart_move(treeInd1);
 		// debug
-		if (nnode() == 179) {
+		if (nnode() == 100) {
 			writeSGF("test.sgf");
 		}
 		// end debug
