@@ -90,6 +90,17 @@ inline Int comp_score2(Int_I score2)
 	return comp_territory2(score2);
 }
 
+// complementary solution (opponent's solution)
+inline Sol comp_sol(Sol_I sol)
+{
+	if (sol == Sol::GOOD)
+		return Sol::BAD;
+	if (sol == Sol::BAD)
+		return Sol::GOOD;
+	// KO_ONLY or UNKNOWN
+	return sol;
+}
+
 // coordinates for a move, or "pass"
 // origin at top left, x axis points right, y axis points down
 // special codes:
@@ -272,6 +283,9 @@ inline Bool Node::is_next_ko(Int_I ind) const
 		error("unknown!");
 }
 
+class Board;
+typedef const Board Board_I;
+
 // status of the board
 // TODO: implement operator << for move
 // TODO: use a better comparation rule so that rotations of a board are considered equal, otherwise unequal
@@ -290,7 +304,7 @@ public:
 	Board(Char_I Nx, Char_I Ny): m_data(Nx, Ny)
 	{ m_data = Who::NONE; m_mark.resize(Nx, Ny); m_mark = 0; }
 
-	inline Bool operator==(const Board &rhs) const
+	inline Bool operator==(Board_I &rhs) const
 	{ return m_data == rhs.m_data; }
 
 	inline void disp() const; // display board on screen
@@ -320,18 +334,6 @@ public:
 	~Board() {}
 };
 
-// imagine Board::m_data as a long integer, try to compare two integers
-inline Bool operator<(const Board &board1, const Board &board2)
-{
-	Int i, N = board_Nx() * board_Ny();
-	for (i = 0; i < N; ++i) {
-		if (board1.m_data(i) == board2.m_data(i)) continue;
-		if (board1.m_data(i) < board2.m_data(i)) return true;
-		return false;
-	}
-	return false;
-}
-
 inline void Board::disp() const
 {
 	Char i, x, y, Nx = board_Nx(), Ny = board_Ny();
@@ -355,6 +357,18 @@ inline void Board::disp() const
 		cout << "    ";
 		for (i = 1; i <= Nx; ++i) cout << "----"; cout << "\n";
 	}
+}
+
+// imagine Board::m_data as a long integer, try to compare two integers
+inline Bool operator<(Board_I &board1, Board_I &board2)
+{
+	Int i, N = board_Nx() * board_Ny();
+	for (i = 0; i < N; ++i) {
+		if (board1.m_data(i) == board2.m_data(i)) continue;
+		if (board1.m_data(i) < board2.m_data(i)) return true;
+		return false;
+	}
+	return false;
 }
 
 // check if a placing is legal, or how many stones will be dead
@@ -786,23 +800,23 @@ public:
 
 	// search Pool: find ind so that *this[ind] == board
 	// TODO: improve implementation (stone by stone algorithm)
-	Int search(Long_O &treeInd, Long_O &orderInd, const Board &board);
+	Int search(Long_O &treeInd, Long_O &orderInd, Board_I &board);
 
 	// add a new board to the Pool
-	inline void push(const Board &board, Int_I search_ret, Long_I orderInd, Long_I treeInd);
+	inline void push(Board_I &board, Int_I search_ret, Long_I orderInd, Long_I treeInd);
 };
 
-Int Pool::search(Long_O &treeInd, Long_O &orderInd, const Board &board)
+Int Pool::search(Long_O &treeInd_same, Long_O &orderInd, Board_I &board)
 {
 	Int ret = lookupInt(orderInd, *this, board);
 	if (ret == 0)
-		treeInd = m_treeInd[m_order[orderInd]];
+		treeInd_same = m_treeInd[m_order[orderInd]];
 	return ret;
 }
 
 // orderInd is output by search() and search_ret is returned by search()
 // orderInd should be -3, -2, -1 or 1
-inline void Pool::push(const Board &board, Int_I search_ret, Long_I orderInd, Long_I treeInd)
+inline void Pool::push(Board_I &board, Int_I search_ret, Long_I orderInd, Long_I treeInd)
 {
 	m_boards.push_back(board);
 	m_treeInd.push_back(treeInd);
@@ -883,7 +897,7 @@ public:
 	inline Int islinked(Long_I treeInd1, Long_I treeInd2); // check if node treeInd1 can lead to node treeInd2
 
 	// check if same board already exists in the Pool and decide if it is a Ko
-	inline Int check_ko(Int_O &search_ret, Long_O &treeInd1, Long_O &orderInd, Long_I treeInd, const Board &board);
+	inline Int check_ko(Int_O &search_ret, Long_O &treeInd_same, Long_O &orderInd, Long_I treeInd, Board_I &board);
 	
 	inline void branch(vector<Long> &br, Long_I treeInd = -1); // get an index vector of the a branch ending at a node
 
@@ -893,7 +907,7 @@ public:
 
 	inline Long writeSGF0(ofstream &fout, Long_I treeInd = -1); // internal function called by writeSGF();
 
-	inline void writeSGF01(ofstream &fout, Long_I treeInd); // internal function called by writeSGF0();
+	inline void writeSGF01(ofstream &fout, Long_I treeInd, const string &prefix = ""); // internal function called by writeSGF0();
 
 	inline Bool next_exist(Move mov, Long_I treeInd = -1); // does next node have this mov already?
 
@@ -918,11 +932,34 @@ public:
 
 	void calc_score(Long_I treeInd = -1); // calculate territory and save to m_territory2
 
-	Int & score2(Long_I treeInd = -1)
-	{ return node(def(treeInd)).m_score2; }
+	Int score2(Long_I treeInd = -1) const
+	{
+		Int sco2 = node(def(treeInd)).m_score2;
+		if (sco2 < 0 || sco2 > 2 * board_Nx() * board_Ny())
+			error("illegal score");
+		return sco2;
+	}
 
-	Sol & solution(Long_I treeInd = -1)
+	void set_score2(Int score2, Long_I treeInd = -1)
+	{
+		if (score2 < 0 || score2 > 2 * board_Nx() * board_Ny())
+			error("illegal score");
+		node(def(treeInd)).m_score2 = score2;
+	}
+
+	Sol solution(Long_I treeInd = -1) const
 	{ return node(def(treeInd)).m_sol; }
+
+	void set_solution(Sol_I sol, Long_I treeInd = -1)
+	{ node(def(treeInd)).m_sol = sol; }
+
+	Bool solved(Long_I treeInd = -1) const
+	{
+		Sol sol = solution(def(treeInd));
+		if (sol == Sol::GOOD || sol == Sol::BAD || sol == Sol::FAIR)
+			return true;
+		return false;
+	}
 
 	Sol & best_child_sol(Long_I treeInd = -1)
 	{ return node(def(treeInd)).m_best_child_sol; }
@@ -1072,24 +1109,29 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 	// check Ko
 	Int search_ret;
 	Long orderInd;
-	Long treeInd_ko;
-	ret = check_ko(search_ret, treeInd_ko, orderInd, treeInd1, board);
+	Long treeInd_found;
+	ret = check_ko(search_ret, treeInd_found, orderInd, treeInd1, board);
 	if (ret < 0) { // board already exists
 		if (ret == -1) { // not a ko
-			m_nodes[treeInd1].push_next(treeInd_ko);
-			if (treeInd < 0) m_treeInd = treeInd_ko;
+			m_nodes[treeInd1].push_next(treeInd_found);
+			if (treeInd < 0) m_treeInd = treeInd_found;
 			return 1;
 		}
 		else if (ret == -2) { // is a ko
-			m_nodes[treeInd1].push_next(-treeInd_ko - 1);
+			m_nodes[treeInd1].push_next(-treeInd_found - 1);
 			return -2;
 		}
+		// ret == -3: not the same player, continue
 	}
 	
 	// board is new
-	// push board to pool
-	m_pool.push(board, search_ret, orderInd, treeInd1+1);
-	node.place(x, y, ::next(who(treeInd1)), treeInd1, m_pool.size()-1);
+	if (ret == -3) { // no need to push
+		node.place(x, y, ::next(who(treeInd1)), treeInd1, m_nodes[treeInd_found].poolInd());
+	}
+	else { // push board to pool
+		m_pool.push(board, search_ret, orderInd, treeInd1 + 1);
+		node.place(x, y, ::next(who(treeInd1)), treeInd1, m_pool.size() - 1);
+	}
 
 	// add Node to tree
 	m_nodes.push_back(node);
@@ -1119,16 +1161,20 @@ inline Int Tree::islinked(Long_I treeInd1, Long_I treeInd2)
 }
 
 // 'nodes[treeInd]' will produce 'board' in the next move
-// if board is new, return 0
 // if board already exists, output tree index of the same board
-// if it is not a ko, return -1, if a ko is found, return -2
+// return 0 if board is new
+// return -1 if it is not a ko
+// return -2 if a ko is found
+// return -3 if board exist but player is different (solution/score not the same!)
 // (in case of multiple upward fork, there might be no ko for some branches!)
-inline Int Tree::check_ko(Int_O &search_ret, Long_O &treeInd1, Long_O &orderInd, Long_I treeInd, const Board &board)
+inline Int Tree::check_ko(Int_O &search_ret, Long_O &treeInd_same, Long_O &orderInd, Long_I treeInd, Board_I &board)
 {
-	search_ret = m_pool.search(treeInd1, orderInd, board);
+	search_ret = m_pool.search(treeInd_same, orderInd, board);
 	// board already exists
 	if (search_ret == 0) {
-		if (islinked(treeInd1, treeInd))
+		if (who(treeInd_same) == who(treeInd))
+			return -3;
+		if (islinked(treeInd_same, treeInd))
 			return -2; // Ko!
 		return -1; // no Ko
 	}
@@ -1220,6 +1266,7 @@ inline Long Tree::writeSGF0(ofstream &fout, Long_I treeInd)
 	Int i, nnext;
 	Long treeInd1 = def(treeInd), treeInd2;
 	static Long max_treeInd = treeInd1 - 1;
+	if (treeInd == 1) max_treeInd = 0;
 
 	// write one node
 	writeSGF01(fout, treeInd1);
@@ -1232,11 +1279,13 @@ inline Long Tree::writeSGF0(ofstream &fout, Long_I treeInd)
 			if (isend(treeInd1)) {
 				return max_treeInd; // game ends
 			}
-			if (is_next_ko(treeInd1))
-				return max_treeInd; // ko link
 			treeInd2 = next(treeInd1);
+			if (is_next_ko(treeInd1)) {
+				writeSGF01(fout, treeInd2, "ko>");
+				return max_treeInd; // ko link
+			}
 			if (treeInd2 < treeInd1) { // reached a link to an existing node
-				writeSGF01(fout, treeInd1); // write a node to represent a link
+				writeSGF01(fout, treeInd2, ">"); // write a node to represent a link
 				return max_treeInd; 
 			}
 			if (treeInd2 != treeInd1 + 1)
@@ -1255,11 +1304,15 @@ inline Long Tree::writeSGF0(ofstream &fout, Long_I treeInd)
 	// write downward branches
 	for (i = 0; i < nnext; ++i) {
 		fout << '(';
-		if (isend(treeInd1) || is_next_ko(treeInd1, i))
-			error("unhandled case"); // game ends or ko link!
+		if (isend(treeInd1))
+			error("unkown error"); // game ends or ko link!
 		treeInd2 = next(treeInd1, i);
+		if (is_next_ko(treeInd1, i)) {
+			writeSGF01(fout, treeInd2, "ko>"); // write a node to represent a link
+			continue;
+		}
 		if (treeInd2 < max_treeInd) { // reached a link to an existing node
-			writeSGF01(fout, treeInd2); // write a node to represent a link
+			writeSGF01(fout, treeInd2, ">"); // write a node to represent a link
 			continue;
 		}
 		if (treeInd2 != max_treeInd + 1)
@@ -1272,7 +1325,7 @@ inline Long Tree::writeSGF0(ofstream &fout, Long_I treeInd)
 }
 
 // write one node to SGF file
-inline void Tree::writeSGF01(ofstream &fout, Long_I treeInd1)
+inline void Tree::writeSGF01(ofstream &fout, Long_I treeInd1, const string &prefix)
 {
 	Char BW; // letter B or letter W
 	Node & node = m_nodes[treeInd1];
@@ -1291,9 +1344,9 @@ inline void Tree::writeSGF01(ofstream &fout, Long_I treeInd1)
 		fout << '[' << char('a' + node.x()) << char('a' + node.y()) << "]";
 
 	// add node number to title
-	fout << "N[[" << treeInd1 << "\\]";
+	fout << "N[" << prefix << "[" << treeInd1 << "\\]";
 	// add score
-	if (score2(treeInd1) >= 0)
+	if (solved(treeInd1))
 		fout << 0.5*score2(treeInd1);
 	// end title
 	fout << "]";
@@ -1479,6 +1532,8 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 	Int i, ret, child_treeInd;
 	Long treeInd1 = def(treeInd);
 	Bool found_ko = false;
+	Int child_sco2;
+	Sol child_sol;
 
 	// if already solved
 	if (solution(treeInd1) != Sol::UNKNOWN) {
@@ -1492,7 +1547,7 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 	for (i = 0; i < 1000; ++i) {
 		ret = rand_smart_move(treeInd1);
 		// debug
-		if (nnode() == 129) {
+		if (nnode() == 179) {
 			writeSGF("test.sgf");
 		}
 		// end debug
@@ -1507,8 +1562,9 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 				// end debug
 			}
 			// linked to existing node, no Ko
-			else if (ret == 1)
+			else if (ret == 1) {
 				child_treeInd = next(treeInd1, -1);
+			}
 			else
 				error("unhandled case!");
 
@@ -1516,12 +1572,15 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 			if (ret == -1) {
 				continue; // downstream ko exists
 			}
-			if (best_child_sco2(treeInd1) < score2(child_treeInd)) {
-				best_child_sco2(treeInd1) = score2(child_treeInd);
-				best_child_sol(treeInd1) = solution(child_treeInd);
+			child_sco2 = score2(child_treeInd);
+			child_sol = solution(child_treeInd);
+
+			if (best_child_sco2(treeInd1) < child_sco2) {
+				best_child_sco2(treeInd1) = child_sco2;
+				best_child_sol(treeInd1) = child_sol;
 				if (best_child_sol(treeInd1) == Sol::GOOD) {
-					solution(treeInd1) = Sol::BAD;
-					score2(treeInd1) = comp_score2(best_child_sco2(treeInd1));
+					set_solution(Sol::BAD, treeInd1);
+					set_score2(comp_score2(best_child_sco2(treeInd1)), treeInd1);
 					return 0; // debug break point
 				}
 			}
@@ -1539,19 +1598,19 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 			// all children solved
 			if (!found_ko) {
 				if (best_child_sol(treeInd1) == Sol::FAIR) {
-					solution(treeInd1) = Sol::FAIR;
-					score2(treeInd1) = comp_score2(best_child_sco2(treeInd1));
+					set_solution(Sol::FAIR, treeInd1);
+					set_score2(comp_score2(best_child_sco2(treeInd1)), treeInd1);
 				}
 				else { // best == Sol::BAD
-					solution(treeInd1) = Sol::GOOD;
-					score2(treeInd1) = comp_score2(best_child_sco2(treeInd1));
+					set_solution(Sol::GOOD, treeInd1);
+					set_score2(comp_score2(best_child_sco2(treeInd1)), treeInd1);
 				}
 				return 0; // debug break point
 			}
 			// not all children solved
 			else {
-				solution(treeInd1) = Sol::KO_ONLY;
-				score2(treeInd1) = comp_score2(best_child_sco2(treeInd1));
+				set_solution(Sol::KO_ONLY, treeInd1);
+				set_score2(comp_score2(best_child_sco2(treeInd1)), treeInd1);
 				return -1; // debug break point
 			}
 		}
@@ -1567,8 +1626,8 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 				best_child_sco2(treeInd1) = score2(child_treeInd);
 				best_child_sol(treeInd1) = solution(child_treeInd);
 				if (best_child_sol(treeInd1) == Sol::GOOD) {
-					solution(treeInd1) = Sol::BAD;
-					score2(treeInd1) = comp_score2(best_child_sco2(treeInd1));
+					set_solution(Sol::BAD, treeInd1);
+					set_score2(comp_score2(best_child_sco2(treeInd1)), treeInd1);
 					return 0; // debug break point
 				}
 			}
@@ -1582,7 +1641,7 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 Who Tree::winner(Long treeInd)
 {
 	Long treeInd1 = def(treeInd);
-	Sol & sol = solution(treeInd1);
+	Sol sol = solution(treeInd1);
 	Who player = who(treeInd1);
 	
 	if (sol == Sol::UNKNOWN)
@@ -1620,11 +1679,11 @@ void Tree::calc_sol(Long_I treeInd)
 		error("illegal player!");
 	Int score4 = 2 * score2(treeInd1);
 	if (score4 > score4_draw)
-		solution(treeInd1) = Sol::GOOD;
+		set_solution(Sol::GOOD, treeInd1);
 	else if (score4 < score4_draw)
-		solution(treeInd1) = Sol::BAD;
+		set_solution(Sol::BAD, treeInd1);
 	else
-		solution(treeInd1) = Sol::FAIR;
+		set_solution(Sol::FAIR, treeInd1);
 }
 
 void Tree::calc_score(Long_I treeInd) // calculate territory and save to m_territory2
