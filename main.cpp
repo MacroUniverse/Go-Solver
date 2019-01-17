@@ -213,7 +213,9 @@ public:
 	Int nlast() const { return m_last.size(); }
 	Long last(Int_I ind) const { return m_last[ind]; }
 	Int nnext() const { return m_next.size(); }
-	inline Long next(Int_I ind) const;
+	inline Long next(Int_I ind) const; // tree index for a child
+	inline Bool isend() const; // is this a bottom node (end of game)?
+	inline Bool is_next_ko(Int_I ind) const; // is this a ko link?
 
 	// set
 	void init(Long_I poolInd) { Move::init(); m_last.resize(0); m_who = Who::NONE; m_poolInd = poolInd; }
@@ -232,10 +234,42 @@ public:
 // ind = -1 : last element, ind = -2 : second last element, etc.
 Long Node::next(Int_I ind) const
 {
+	Long treeInd;
 	if (ind < 0)
-		return m_next[nnext() + ind];
+		treeInd = m_next[nnext() + ind];
 	else
-		return m_next[ind];
+		treeInd = m_next[ind];
+
+	if (treeInd > 0)
+		return treeInd;
+	else if (treeInd < -1)
+		return -treeInd - 1;
+	else
+		error("unkown!");
+}
+
+inline Bool Node::isend() const
+{
+	if (m_next.size() == 1 & m_next[0] == -1)
+		return true;
+	return false;
+}
+
+// ind = -1 : last element, ind = -2 : second last element, etc.
+inline Bool Node::is_next_ko(Int_I ind) const
+{
+	Long treeInd;
+	if (ind < 0)
+		treeInd = m_next[nnext() + ind];
+	else
+		treeInd = m_next[ind];
+
+	if (treeInd < -1)
+		return true;
+	else if (treeInd > 0)
+		return false;
+	else
+		error("unknown!");
 }
 
 // status of the board
@@ -814,7 +848,9 @@ public:
 
 	Long nnode() const { return m_nodes.size(); } // return number of nodes in the tree
 
-	inline Bool isend(Long_I treeInd = -1); // if a node is an end node
+	inline Bool isend(Long_I treeInd = -1) const; // if a node is an end node
+
+	inline Bool is_next_ko(Long_I treeInd = -1, Int_I forkInd = 0) const;
 
 	inline Node & node(Long_I treeInd = -1) // return a reference of a node
 	{ return m_nodes[def(treeInd)]; }
@@ -827,10 +863,11 @@ public:
 	const Node & lastNode(Long_I treeInd = -1, Int_I forkInd = 0) // return a reference of the last node of a node
 	{ return m_nodes[last(treeInd, forkInd)]; }
 
-	inline Long next(Long_I treeInd = -1, Int_I forkInd = 0) const; // return an index of the next node of a node
+	// return an index of the next node of a node, fork can be negative
+	inline Long next(Long_I treeInd = -1, Int_I forkInd = 0) const;
 
 	const Node & nextNode(Long_I treeInd = -1, Int_I forkInd = 0) // return a reference of the next node of a node
-	{ return m_nodes[next(treeInd, forkInd)]; }
+	{ return m_nodes[next(treeInd, forkInd)]; } // forkInd can be negative
 
 	Who who(Long_I treeInd = -1) const // who played the node
 	{ return m_nodes[def(treeInd)].who(); }
@@ -912,16 +949,18 @@ Tree::Tree() : m_treeInd(0)
 	m_nodes.push_back(node);
 }
 
-inline Bool Tree::isend(Long_I treeInd)
+inline Bool Tree::isend(Long_I treeInd /*optional*/) const
 {
-	Long treeInd1 = def(treeInd);
-	if (m_nodes[treeInd1].nnext() > 0) {
-		if (m_nodes[treeInd1].next(0) == -1) {
+	if (m_nodes[def(treeInd)].isend())
 			return true;
-			if (m_nodes[treeInd1].nnext() > 1)
-				error("something is wrong!");
-		}
-	}
+	return false;
+}
+
+inline Bool Tree::is_next_ko(Long_I treeInd /*optional*/, Int_I forkInd /*optional*/) const
+{
+	if (m_nodes[def(treeInd)].is_next_ko(forkInd))
+		return true;
+	return false;
 }
 
 inline Long Tree::last(Long_I treeInd /*optional*/, Int_I forkInd /*optional*/) const
@@ -932,8 +971,7 @@ inline Long Tree::last(Long_I treeInd /*optional*/, Int_I forkInd /*optional*/) 
 
 inline Long Tree::next(Long_I treeInd /*optional*/, Int_I forkInd /*optional*/) const
 {
-	const Node &node = m_nodes[def(treeInd)];
-	return node.next(forkInd);
+	return  m_nodes[def(treeInd)].next(forkInd);
 }
 
 inline void Tree::disp_board(Long_I treeInd /*optional*/) const
@@ -1166,43 +1204,49 @@ inline void Tree::writeSGF(const string &name)
 	Int i; Char x, y;
 	
 	fout.flush(); // debug
-	Long count =  writeSGF0(fout, 1);
-	if (count != nnode() - 1)
+	Long max_treeInd =  writeSGF0(fout, 1);
+	if (max_treeInd != nnode() - 1)
 		error("writeSGF() nodes number does not match!");
 	
 	fout << ")\n";
 	fout.close();
 }
 
-// return # of nodes written
+// return max node index written
+// nodes should be written in the order of treeIndex
 // recursively write the tree
 inline Long Tree::writeSGF0(ofstream &fout, Long_I treeInd)
 {
 	Int i, nnext;
-	Long treeInd1 = def(treeInd), treeInd2, count = 0;
+	Long treeInd1 = def(treeInd), treeInd2;
+	static Long max_treeInd = treeInd1 - 1;
 
 	// write one node
-	Node & node = m_nodes[treeInd1];
-	nnext = node.nnext();
-	
-	writeSGF01(fout, treeInd1); ++count;
+	writeSGF01(fout, treeInd1);
+	++max_treeInd;
 
 	// go down the branch if no fork
 	for (i = 0; i < 10000; ++i) {
 		nnext = m_nodes[treeInd1].nnext();
 		if (nnext == 1) {
-			treeInd2 = m_nodes[treeInd1].next(0);
-			if (treeInd2 < 0)
-				return count; // game ends!
+			if (isend(treeInd1)) {
+				return max_treeInd; // game ends
+			}
+			if (is_next_ko(treeInd1))
+				return max_treeInd; // ko link
+			treeInd2 = next(treeInd1);
+			if (treeInd2 < treeInd1) { // reached a link to an existing node
+				writeSGF01(fout, treeInd1); // write a node to represent a link
+				return max_treeInd; 
+			}
 			if (treeInd2 != treeInd1 + 1)
-				return count; // reached a link to an existing node
+				error("unknown!");
 			treeInd1 = treeInd2;
-			Node & node = m_nodes[treeInd1];
-			
-			writeSGF01(fout, treeInd1); ++count;
+			writeSGF01(fout, treeInd1);
+			++max_treeInd;
 		}
 		else if (nnext == 0)
-			return count;
+			return max_treeInd;
 		else if (nnext > 1) {
 			break; // reached downward fork
 		}
@@ -1211,16 +1255,20 @@ inline Long Tree::writeSGF0(ofstream &fout, Long_I treeInd)
 	// write downward branches
 	for (i = 0; i < nnext; ++i) {
 		fout << '(';
-		treeInd2 = m_nodes[treeInd1].next(i);
-		if (treeInd2 < 0)
-			error("unhandled case"); // game ends or ko!
-		if (treeInd2 != treeInd1 + 1)
-			continue; // reached a link to an existing node
-		else
-			count += writeSGF0(fout, m_nodes[treeInd1].next(i));
+		if (isend(treeInd1) || is_next_ko(treeInd1, i))
+			error("unhandled case"); // game ends or ko link!
+		treeInd2 = next(treeInd1, i);
+		if (treeInd2 < max_treeInd) { // reached a link to an existing node
+			writeSGF01(fout, treeInd2); // write a node to represent a link
+			continue;
+		}
+		if (treeInd2 != max_treeInd + 1)
+			error("unknown!");
+
+		writeSGF0(fout, treeInd2);
 		fout << ')';
 	}
-	return count;
+	return max_treeInd;
 }
 
 // write one node to SGF file
@@ -1247,9 +1295,6 @@ inline void Tree::writeSGF01(ofstream &fout, Long_I treeInd1)
 	// add score
 	if (score2(treeInd1) >= 0)
 		fout << 0.5*score2(treeInd1);
-	// add link to title
-	if (node.nnext() > 0 && next(treeInd1) != treeInd1 + 1)
-		fout << ">[" << next(treeInd1) << "\\]";
 	// end title
 	fout << "]";
 
@@ -1271,10 +1316,12 @@ inline void Tree::writeSGF01(ofstream &fout, Long_I treeInd1)
 inline Bool Tree::next_exist(Move mov, Long_I treeInd /*optional*/)
 {
 	Int i;
-	Node &node = m_nodes[def(treeInd)];
-	for (i = 0; i < node.nnext(); ++i)
-		if (m_nodes[node.next(i)].move() == mov)
+	Long treeInd1 = def(treeInd);
+	Node &node = m_nodes[treeInd1];
+	for (i = 0; i < node.nnext(); ++i) {
+		if (nextNode(treeInd1, i).move() == mov)
 			return true;
+	}
 	return false;
 }
 
@@ -1445,7 +1492,7 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 	for (i = 0; i < 1000; ++i) {
 		ret = rand_smart_move(treeInd1);
 		// debug
-		if (nnode() == 117) {
+		if (nnode() == 129) {
 			writeSGF("test.sgf");
 		}
 		// end debug
@@ -1461,7 +1508,7 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 			}
 			// linked to existing node, no Ko
 			else if (ret == 1)
-				child_treeInd = m_nodes[treeInd1].next(-1);
+				child_treeInd = next(treeInd1, -1);
 			else
 				error("unhandled case!");
 
@@ -1481,7 +1528,7 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 		}
 		// linked to existing node, has Ko
 		else if (ret == 2) {
-			Long child_treeInd = m_nodes[treeInd1].next(-1);
+			Long child_treeInd = next(treeInd1, -1);
 			m_ko_treeInds.push_back(child_treeInd);
 			found_ko = true;
 			continue;
