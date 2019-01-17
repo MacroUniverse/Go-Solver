@@ -115,6 +115,7 @@ private:
 public:
 	// constructor
 	inline Move() {}
+	inline Move(const Move &mov) { m_x = mov.m_x; m_y = mov.m_y; }
 	inline Move(Char_I x, Char_I y);
 	inline Move(Act_I act);
 
@@ -190,14 +191,30 @@ inline void Move::place(Char_I x, Char_I y)
 	m_x = x; m_y = y;
 }
 
+// element type of Node::m_last;
+class Parent : public Move
+{
+public:
+	Long m_treeInd;
+	Parent(const Move &mov, Long_I treeInd): Move(mov), m_treeInd(treeInd) {}
+	// properties
+	using Move::isplace;
+	using Move::ispass;
+	using Move::isedit;
+	using Move::isinit;
+	using Move::type;
+	using Move::x;
+	using Move::y;
+};
+
 // a node in the game tree
 // a fork index (forkInd) is an index for m_last or m_next
 // Move is the move that caused the current board
-class Node: public Move
+class Node
 {
 private:
 	Who m_who; // who's turn is this?
-	vector<Long> m_last; // -1: first node
+	vector<Parent> m_last; // -1: first node
 	vector<Long> m_next; // -1: end node
 	Long m_poolInd; // pool index, board stored in Pool::m_board[m_pool_ind]
 public:
@@ -211,33 +228,26 @@ public:
 	Node(): m_sol(Sol::UNKNOWN), m_best_child_sol(Sol::BAD), m_best_child_sco2(-1), m_all_child_exist(false), m_score2(-1) {}
 	
 	// properties
-	using Move::isplace;
-	using Move::ispass;
-	using Move::isedit;
-	using Move::isinit;
-	using Move::type;
-	using Move::x;
-	using Move::y;
-	const Move & move() const { return *this; }
+	// const Move & move() const { return *this; }
 	Who who() const { return m_who; }
 	Long poolInd() const { return m_poolInd; }
 	Int nlast() const { return m_last.size(); }
-	Long last(Int_I ind) const { return m_last[ind]; }
+	Long last(Int_I ind) const { return m_last[ind].m_treeInd; }
 	Int nnext() const { return m_next.size(); }
 	inline Long next(Int_I ind) const; // tree index for a child
 	inline Bool isend() const; // is this a bottom node (end of game)?
 	inline Bool is_next_ko(Int_I ind) const; // is this a ko link?
 
 	// set
-	void init(Long_I poolInd) { Move::init(); m_last.resize(0); m_who = Who::NONE; m_poolInd = poolInd; }
-	void push_last(Long_I treeInd) { m_last.push_back(treeInd); }
+	void init(Long_I poolInd) { m_last.resize(0); m_last.push_back(Parent(Move(Act::INIT), -1)); m_who = Who::NONE; m_poolInd = poolInd; }
+	void push_last(const Move &mov, Long_I treeInd) { m_last.push_back(Parent(mov, treeInd)); }
 	void push_next(Long_I treeInd) { m_next.push_back(treeInd); }
 
 	void place(Char_I x, Char_I y, Who_I who, Long_I treeInd, Long_I poolInd) // already has bound checking
-	{ Move::place(x, y); m_who = who; push_last(treeInd); m_poolInd = poolInd; }
+	{ m_who = who; push_last(Move(x,y), treeInd); m_poolInd = poolInd; }
 
 	void pass(Who_I who, Long_I treeInd, Long_I poolInd)
-	{ Move::pass(); push_last(treeInd); m_poolInd = poolInd; m_who = who; }
+	{ push_last(Move(Act::PASS), treeInd); m_poolInd = poolInd; m_who = who; }
 
 	~Node() {}
 };
