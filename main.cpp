@@ -854,7 +854,9 @@ public:
 
 	inline void writeSGF(const string &name); // write the whole tree to file
 
-	inline void writeSGF0(ofstream &fout, Long_I treeInd = -1); // internal function called by writeSGF();
+	inline Long writeSGF0(ofstream &fout, Long_I treeInd = -1); // internal function called by writeSGF();
+
+	inline void writeSGF01(ofstream &fout, Long_I treeInd); // internal function called by writeSGF0();
 
 	inline Bool next_exist(Move mov, Long_I treeInd = -1); // does next node have this mov already?
 
@@ -1118,7 +1120,7 @@ inline void Tree::writeSGF_old(const string &name)
 	Char Nx = board_Nx(), Ny = board_Ny();
 	ofstream fout(name);
 	fout << "(\n";
-	fout << "  ;GM[1]FF[4]CA[UTF-8]AP[]KM[0]";
+	fout << ";GM[1]FF[4]CA[UTF-8]AP[]KM[0]";
 
 	// board size
 	if (Nx == Ny)
@@ -1151,7 +1153,7 @@ inline void Tree::writeSGF(const string &name)
 	Char Nx = board_Nx(), Ny = board_Ny();
 	ofstream fout(name);
 	fout << "(\n";
-	fout << "  ;GM[1]FF[4]CA[UTF-8]AP[]KM[0]";
+	fout << "  ;GM[1]FF[4]CA[UTF-8]AP[]KM[" << 0.5*komi2() << "]";
 
 	// board size
 	if (Nx == Ny)
@@ -1160,30 +1162,71 @@ inline void Tree::writeSGF(const string &name)
 		fout << "SZ[" << Int(Nx) << ":" << Int(Ny) << "]";
 	fout << "DT[]\n";
 
-	// write a branch
 	Char BW; // letter B or letter W
 	Int i; Char x, y;
 	
-
-	for (i = 1; i < br.size(); ++i) {
-		// black moves
-		fout << ";" << BW;
-		Node & node = m_nodes[br[i]];
-		if (node.ispass()) // pass
-			fout << "[]\n";
-		else
-			fout << '[' << char('a' + node.x()) << char('a' + node.y()) << "]\n";
-		BW = BW == 'B' ? 'W' : 'B';
-	}
+	fout.flush(); // debug
+	Long count =  writeSGF0(fout, 1);
+	if (count != nnode() - 1)
+		error("writeSGF() nodes number does not match!");
+	
 	fout << ")\n";
+	fout.flush(); // debug
 	fout.close();
 }
 
-inline void Tree::writeSGF0(ofstream &fout, Long_I treeInd)
+// return # of nodes written
+// recursively write the tree
+inline Long Tree::writeSGF0(ofstream &fout, Long_I treeInd)
+{
+	Int i, nnext;
+	Long treeInd1 = def(treeInd), treeInd2, count = 0;
+
+	// write one node
+	Node & node = m_nodes[treeInd1];
+	nnext = node.nnext();
+	
+	writeSGF01(fout, treeInd1); ++count;
+
+	// go down the branch if no fork
+	for (i = 0; i < 10000; ++i) {
+		nnext = m_nodes[treeInd1].nnext();
+		if (nnext == 1) {
+			treeInd2 = m_nodes[treeInd1].next(0);
+			if (treeInd2 < 0)
+				return count; // game ends!
+			if (treeInd2 != treeInd1 + 1)
+				return count; // reached a link to an existing node
+			treeInd1 = treeInd2;
+			Node & node = m_nodes[treeInd1];
+			
+			writeSGF01(fout, treeInd1); ++count;
+
+			fout.flush(); // debug
+		}
+		else if (nnext == 0)
+			return count;
+		else if (nnext > 1) {
+			break; // reached downward fork
+		}
+	}
+
+	// write downward branches
+	for (i = 0; i < nnext; ++i) {
+		fout << '(';
+		count += writeSGF0(fout, m_nodes[treeInd1].next(i));
+		fout << ')';
+		fout.flush(); // debug
+	}
+	return count;
+}
+
+// write one node to SGF file
+inline void Tree::writeSGF01(ofstream &fout, Long_I treeInd1)
 {
 	Char BW; // letter B or letter W
+	Node & node = m_nodes[treeInd1];
 	Int i, nnext;
-	Long treeInd1 = def(treeInd), treeInd2;
 	if (who(treeInd1) == Who::BLACK)
 		BW = 'B';
 	else if (who(treeInd1) == Who::WHITE)
@@ -1191,38 +1234,34 @@ inline void Tree::writeSGF0(ofstream &fout, Long_I treeInd)
 	else
 		error("illegal stone color");
 
-	// write one node
-	Node & node = m_nodes[treeInd1];
-	nnext = node.nnext();
 	fout << ";" << BW;
 	if (node.ispass()) // pass
-		fout << "[]\n";
+		fout << "[]";
 	else
-		fout << '[' << char('a' + node.x()) << char('a' + node.y()) << "]\n";
-	BW = BW == 'B' ? 'W' : 'B';
+		fout << '[' << char('a' + node.x()) << char('a' + node.y()) << "]";
 
-	// do down the tree
-	for (i = 0; i < 10000; ++i) {
-		nnext = m_nodes[treeInd1].nnext();
-		if (nnext == 1) {
-			treeInd2 = m_nodes[treeInd1].next(i);
-			Node & node = m_nodes[treeInd2];
-			fout << ";" << BW;
-			if (node.ispass()) // pass
-				fout << "[]\n";
-			else
-				fout << '[' << char('a' + node.x()) << char('a' + node.y()) << "]\n";
-			BW = BW == 'B' ? 'W' : 'B';
-			if (treeInd2 != treeInd1 + 1)
-				return; // reached a link to an existing node
-			treeInd1 = treeInd2;
-		}
-		else if (nnext == 0)
-			return;
-		else if (nnext > 1) {
-			break; // reached downward fork
-		}
-	}
+	// add node number to title
+	fout << "N[[" << treeInd1 << "\\]";
+	// add score
+	if (score2(treeInd1) >= 0)
+		fout << 0.5*score2(treeInd1);
+	// add link to title
+	if (node.nnext() > 0 && next(treeInd1) != treeInd1 + 1)
+		fout << ">[" << next(treeInd1) << "\\]";
+	// end title
+	fout << "]";
+
+	// add green (black wins) or blue (white wins) mark
+	if (winner(treeInd1) == Who::BLACK)
+		fout << "TE[1]\n"; // green
+	else if (winner(treeInd1) == Who::WHITE)
+		fout << "IT[]\n"; // blue
+	else if (winner(treeInd1) == Who::DRAW)
+		error("TODO...");
+	else if (winner(treeInd1) == Who::NONE)
+		;
+	else
+		error("???");
 }
 
 inline Bool Tree::next_exist(Move mov, Long_I treeInd /*optional*/)
@@ -1401,6 +1440,11 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 	// enumerate children
 	for (i = 0; i < 1000; ++i) {
 		ret = rand_smart_move(treeInd1);
+		// debug
+		if (nnode() > 101) {
+			writeSGF("test.sgf"); exit(EXIT_SUCCESS);
+		}
+		// end debug
 		if (ret == 0 || ret == 1 || ret == 3) {
 			// new node created (might be a first pass)
 			if (ret == 0 || ret == 3) {
@@ -1486,23 +1530,26 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 
 Who Tree::winner(Long treeInd)
 {
-	if (solution() == Sol::UNKNOWN)
-		return Who::NONE;
 	Long treeInd1 = def(treeInd);
-	if (who(treeInd1) == Who::BLACK) {
-		if (solution() == Sol::GOOD)
+	Sol & sol = solution(treeInd1);
+	Who player = who(treeInd1);
+	
+	if (sol == Sol::UNKNOWN)
+		return Who::NONE;
+	if (player == Who::BLACK) {
+		if (sol == Sol::GOOD)
 			return Who::BLACK;
-		if (solution() == Sol::BAD)
+		if (sol == Sol::BAD)
 			return Who::WHITE;
-		if (solution() == Sol::FAIR)
+		if (sol == Sol::FAIR)
 			return Who::DRAW;
 	}
-	else if (who(treeInd1) == Who::WHITE) {
-		if (solution() == Sol::GOOD)
+	else if (player == Who::WHITE) {
+		if (sol == Sol::GOOD)
 			return Who::WHITE;
-		if (solution() == Sol::BAD)
+		if (sol == Sol::BAD)
 			return Who::BLACK;
-		if (solution() == Sol::FAIR)
+		if (sol == Sol::FAIR)
 			return Who::DRAW;
 	}
 	else
