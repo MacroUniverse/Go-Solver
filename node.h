@@ -6,8 +6,10 @@
 class Node
 {
 private:
-	Who m_who; // who's turn is this?
-	vector<Long> m_next; // -1: end node
+	// === data members ===
+
+	Who m_who; // who played this node
+	vector<Long> m_next; // tree indices to next nodes (-1: end node)
 	vector<Long> m_last; // for 0-th node: undefined
 	vector<Move> m_last_mov; // moves of m_last that leads to this node
 	Long m_poolInd; // pool index, board stored in Pool::m_board[m_pool_ind]

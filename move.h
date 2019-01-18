@@ -1,41 +1,56 @@
 #pragma once
 #include "common.h"
 
-// coordinates for a move, or "pass"
-// origin at top left, x axis points right, y axis points down
-// special codes:
-// m_x = -1: pass
-// m_x = -2: edit board
-// m_x = -3: game init (for initial node 0 with empty board)
+// specify a move
 class Move
 {
 private:
-	Char m_x, m_y; // coordinates or special codes
-public:
-	// constructor
-	inline Move() {}
-	inline Move(const Move &mov) { m_x = mov.m_x; m_y = mov.m_y; }
-	inline Move(Char_I x, Char_I y);
-	inline Move(Act_I act);
+	// === data members ===
 
-	// properties
-	Bool isplace() const { return m_x >= 0; }
-	Bool ispass() const { return m_x == -1; }
-	Bool isedit() const { return m_x == -2; }
-	Bool isinit() const { return m_x == -3; }
-	Act type() // 0: isplace(), 1: ispass(), 2: isedit(), 3: isinit()
-	{
-		return isplace() ? Act::PLACE : ispass() ? Act::PASS : isedit() ? Act::EDIT : Act::INIT;
-	}
-	inline Char x() const;
-	inline Char y() const;
+	// coordinates of the board
+	// special codes:
+	// m_x = -1: pass
+	// m_x = -2: edit board
+	// m_x = -3: game init (for initial node 0 with empty board)
+	Char m_x, m_y; // coordinates or special codes
+
+public:
+	// === constructors ===
+	Move() {}
+	Move(const Move &mov) { m_x = mov.m_x; m_y = mov.m_y; }
+	Move(Char_I x, Char_I y);
+	Move(Act_I act);
+
+	// === const functions ===
+
+	Act type() const; // move type
+
+	Bool isplace() const; // if is a PLACE
+
+	Bool ispass() const; // if is a PASS
+
+	Bool isedit() const; // if is an EDIT
+
+	Bool isinit() const; // if is an INIT
+
+	Char x() const; // x coordinate of PLACE
+
+	Char y() const; // y coordinate of PLACE
+
+	// if two moves are the same
 	Bool operator==(const Move &rhs) const;
 
-	// edit
-	inline void place(Char_I x, Char_I y);
-	void pass() { m_x = -1; }
+	// === none-const functions ===
+	
+	void place(Char_I x, Char_I y); // place a stone
+
+	void pass() { m_x = -1; } // pass
+
 	void edit() { m_x = -2; } // edit board
+
 	void init() { m_x = -3; } // init game
+
+	// === destructor ===
 	~Move() {}
 };
 
@@ -57,6 +72,31 @@ inline Move::Move(Act_I act)
 		m_x = -3;
 	else
 		error("illegal Act type!");
+}
+
+inline Act Move::type() const
+{
+	return isplace() ? Act::PLACE : ispass() ? Act::PASS : isedit() ? Act::EDIT : Act::INIT;
+}
+
+inline Bool Move::isplace() const
+{
+	return m_x >= 0;
+}
+
+inline Bool Move::ispass() const
+{
+	return m_x == -1;
+}
+
+inline Bool Move::isedit() const
+{
+	return m_x == -2;
+}
+
+inline Bool Move::isinit() const
+{
+	return m_x == -3;
 }
 
 inline Char Move::x() const

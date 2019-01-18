@@ -33,6 +33,13 @@ With a slightly different implementation, it's possible to solve a node without 
 
 However, this will require much more calculation because to score a node, all it's children must be scored. A compromise between solving and scoring will be to set a reasonable komi first, solve the given node and score it from the solved children, since probably not all children are solved, the score might be over estimated. If another komi is needed later, we might only need to score a few additional children of each node instead of starting all-over again or scoring all children.
 
+## Computer Player Rules
+* A dumb move is a bad move in all situation, and should never be played by the computer. Currently dumb moves include dumb eye filling and dumb big eye filling.
+* An eye is a single empty point surrounded by the same color of stones. 4 stones are needed for an eye not on boarder, 3 for edge, 2 for corner.
+* A Dumb eye filling is placing a stone in a player's own eye when it will not be destroyed by the opponent immediately. If this is allowed when enumerating child nodes, the computer will frequently commit suicide.
+* A big eye is two connected empty points, surrounded by connected stones. It's not possible to destroy a big eye in one step.
+* A Dumb big eye filling is placing a stone in a player's own big eye. At the end of the game, there will be no big eye left because the opponent will eventually try to destroy it.
+
 ## Node Implementation
 Since there might be two different nodes in the tree that have the same board configuration, in the program, they are combined as a single node, and all nodes are allowed to link to multiple parents as well as multiple children. So a `Node` object has the following important data members:
 * a `Move` object that stores either the coordinates of a move that leads to this node or an action such as "pass", "edit board" (for program flexibility) or "initialize game" (for the top node).

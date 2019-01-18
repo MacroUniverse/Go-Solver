@@ -29,7 +29,7 @@ enum class Sol : Char { BAD, FAIR, GOOD, UNKNOWN, KO_ONLY };
 typedef const Sol Sol_I;
 
 // convert who to integer
-Int who2int(Who_I who)
+inline Int who2int(Who_I who)
 {
 	if (who == Who::NONE)
 		return 0;
@@ -91,7 +91,7 @@ inline Int komi2(Int_I k2 = -1132019)
 }
 
 // complementary territory (opponent's territory)
-inline Int comp_territory2(Int_I territory2)
+inline Int inv_territory2(Int_I territory2)
 {
 	return 2 * board_Nx()*board_Ny() - territory2;
 }
@@ -99,11 +99,11 @@ inline Int comp_territory2(Int_I territory2)
 // complementary score (opponent's territory)
 inline Int comp_score2(Int_I score2)
 {
-	return comp_territory2(score2);
+	return inv_territory2(score2);
 }
 
 // complementary solution (opponent's solution)
-inline Sol comp_sol(Sol_I sol)
+inline Sol inv_sol(Sol_I sol)
 {
 	if (sol == Sol::GOOD)
 		return Sol::BAD;

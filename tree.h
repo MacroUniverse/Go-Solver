@@ -10,6 +10,7 @@
 class Tree
 {
 private:
+	// === data members ===
 	Long m_treeInd; // index of the current step (already played) in m_data (init: -1)
 	vector<Node> m_nodes;
 	Pool m_pool;
@@ -17,17 +18,14 @@ private:
 public:
 	Tree();
 
-	// global work space, should not be a member
+	// global work space, TODO: should not be members
 	vector<Long> m_ko_treeInds; // keep track of all the destinations of Ko links
 	Sol m_ko_best; // best descendent solution except ko
 
-				   // peoperties
-	const Board & get_board(Long_I treeInd = -1) const // reference to the Board obj of a node
-	{
-		Long treeInd1 = def(treeInd);
-		Long poolInd = m_nodes[treeInd1].poolInd();
-		return m_pool.m_boards[poolInd];
-	}
+	// === const functions ===
+
+	// return Board reference of a node
+	const Board & get_board(Long_I treeInd = -1) const;
 
 	Long index() const { return m_treeInd; } // return current node index
 
@@ -108,54 +106,57 @@ public:
 	inline Int rand_move(Long_I treeInd = -1);
 
 	// smarter random move for a node
-	// will not fill single eye unless it could be destroyed immediately, or if all other moves already exists
+	// will not do a dumb move (dumb eye filling or dumb big eye filling)
+	// return 0 if successful and new node created
+	// return 1 if linked to existing node and no Ko
+	// return 2 if linked to existing node and has Ko
+	// return 3 if sucessful but is a dumb move
+	// return -1 if there is all legal moves already exists
+	// return -2 if passed and game ends
 	inline Int rand_smart_move(Long_I treeInd = -1);
 
-	// randomly play to the end of the game from a node (default: from top node)
-	inline Int rand_game(Long_I treeInd = 0, Bool_I out = false);
+	// randomly play to the end of the game from a node
+	// m_treeInd will be changed to the end node!
+	// the end node will have the correct Node::m_win
+	// using rand_move1() currently
+	// set "out = true" for output to terminal and test.sgf
+	inline Int rand_game(Long_I treeInd = -1, Bool_I out = false);
 
 	inline void solve_end(Long_I treeInd = -1); // solve a bottom node
 
-	inline Int solve(Long_I treeInd = -1); // analyse who has winning strategy for a node
+	// analyse who has winning strategy for a node
+	// might m_treeInd be changed? it shouldn't
+	// this is a recursive function
+	// using rand_smart_move() to generate moves until a better one is available
+	// assuming there is no branch after treeInd for now
+	// return 0 if successful
+	// return -1 if at least one downstream ko exists, and all other descendents have been solved
+	//           all downstream ko stored in Tree::m_ko_treeInds, best downstream solution stored in Tree::m_ko_best
+	inline Int solve(Long_I treeInd = -1);
 
-	Who winner(Long treeInd = -1);
+	// the winner of a node
+	Who winner(Long treeInd = -1) const;
 
-	void calc_sol(Long_I treeInd = -1); // update m_sol based on m_territory2 and komi
+	// calculate and update score for a node
+	void calc_score(Long_I treeInd = -1);
 
-	void calc_score(Long_I treeInd = -1); // calculate territory and save to m_territory2
+	// update solution for a node based on scores and komi
+	void calc_sol(Long_I treeInd = -1);
 
-	Int score2(Long_I treeInd = -1) const
-	{
-		Int sco2 = node(def(treeInd)).m_score2;
-		if (sco2 < 0 || sco2 > 2 * board_Nx() * board_Ny())
-			error("illegal score");
-		return sco2;
-	}
+	// stored doubled score of a node (might not be up to date)
+	Int score2(Long_I treeInd = -1) const;
 
-	void set_score2(Int score2, Long_I treeInd = -1)
-	{
-		if (score2 < 0 || score2 > 2 * board_Nx() * board_Ny())
-			error("illegal score");
-		node(def(treeInd)).m_score2 = score2;
-	}
+	// set score of a node
+	void set_score2(Int score2, Long_I treeInd = -1);
 
-	Sol solution(Long_I treeInd = -1) const
-	{
-		return node(def(treeInd)).m_sol;
-	}
+	// stored solution of a node (might not be up to date)
+	Sol solution(Long_I treeInd = -1) const;
 
-	void set_solution(Sol_I sol, Long_I treeInd = -1)
-	{
-		node(def(treeInd)).m_sol = sol;
-	}
+	// set solution of a node
+	void set_solution(Sol_I sol, Long_I treeInd = -1);
 
-	Bool solved(Long_I treeInd = -1) const
-	{
-		Sol sol = solution(def(treeInd));
-		if (sol == Sol::GOOD || sol == Sol::BAD || sol == Sol::FAIR)
-			return true;
-		return false;
-	}
+	// if a node is solved (GOOD/BAD/FAIR)
+	Bool solved(Long_I treeInd = -1) const;
 
 	Sol & best_child_sol(Long_I treeInd = -1)
 	{
@@ -180,6 +181,13 @@ public:
 
 	~Tree() {}
 };
+
+const Board & Tree::get_board(Long_I treeInd = -1) const
+{
+	Long treeInd1 = def(treeInd);
+	Long poolInd = m_nodes[treeInd1].poolInd();
+	return m_pool.m_boards[poolInd];
+}
 
 // create 0-th node: empty board
 Tree::Tree() : m_treeInd(0)
@@ -591,19 +599,12 @@ Int Tree::rand_move(Long_I treeInd /*optional*/)
 	error("update this function from rand_smart_move()");
 }
 
-// return 0 if successful and new node created
-// return 1 if linked to existing node and no Ko
-// return 2 if linked to existing node and has Ko
-// return 3 if sucessful but is a dumb move
-// return -1 if there is all legal moves already exists
-// return -2 if passed and game ends
-Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
+inline Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 {
 	Bool exist, exist_pass = false;
 	Int i, j, ret, Nx = board_Nx(), Ny = board_Ny(), Nxy = Nx*Ny;
 	Char x0, y0, x, y;
 	VecInt xy;
-	vector<Int> dumb_xy;
 	Long_I treeInd1 = def(treeInd);
 	Node & node = m_nodes[treeInd1];
 
@@ -622,11 +623,9 @@ Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 			continue;
 		// check dumb eye filling
 		if (get_board(treeInd1).is_dumb_eye_filling(x, y, ::next(who(treeInd1)))) {
-			dumb_xy.push_back(i);
 			continue;
 		}
 		if (get_board(treeInd1).is_dumb_2eye_filling(x, y, ::next(who(treeInd1)))) {
-			dumb_xy.push_back(i);
 			continue;
 		}
 		ret = place(x, y, treeInd1);
@@ -646,21 +645,9 @@ Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 		else return 0; // first pass
 	}
 
-	// consider doing dumb move
-	Nxy = dumb_xy.size();
-	for (i = 0; i < Nxy; ++i) {
-		x = xy[i] % Nx; y = xy[i] / Nx;
-		if (place(x, y) < 0) continue;
-		else return 3;
-	}
-
 	return -1; // all leagl moves already exist
 }
 
-// m_treeInd will be changed to the end node!
-// the end node will have the correct Node::m_win
-// using rand_move1() currently
-// set "out = true" for output to terminal and test.sgf
 inline Int Tree::rand_game(Long_I treeInd, Bool_I out)
 {
 	Int i, ret;
@@ -722,13 +709,6 @@ inline void Tree::solve_end(Long_I treeInd)
 	calc_score(treeInd1); calc_sol(treeInd1);
 }
 
-// might m_treeInd be changed? it shouldn't
-// this is a recursive function
-// using rand_smart_move() to generate moves until a better one is available
-// assuming there is no branch after treeInd for now
-// return 0 if successful
-// return -1 if at least one downstream ko exists, and all other descendents have been solved
-//           all downstream ko stored in Tree::m_ko_treeInds, best downstream solution stored in Tree::m_ko_best
 Int Tree::solve(Long_I treeInd /*optional*/)
 {
 	Int i, ret, child_treeInd;
@@ -840,7 +820,7 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 	error("unkown error!"); return -1;
 }
 
-Who Tree::winner(Long treeInd)
+Who Tree::winner(Long treeInd) const
 {
 	Long treeInd1 = def(treeInd);
 	Sol sol = solution(treeInd1);
@@ -886,6 +866,39 @@ void Tree::calc_sol(Long_I treeInd)
 		set_solution(Sol::BAD, treeInd1);
 	else
 		set_solution(Sol::FAIR, treeInd1);
+}
+
+inline Int Tree::score2(Long_I treeInd) const
+{
+	Int sco2 = node(def(treeInd)).m_score2;
+	if (sco2 < 0 || sco2 > 2 * board_Nx() * board_Ny())
+		error("illegal score");
+	return sco2;
+}
+
+inline void Tree::set_score2(Int score2, Long_I treeInd = -1)
+{
+	if (score2 < 0 || score2 > 2 * board_Nx() * board_Ny())
+		error("illegal score");
+	node(def(treeInd)).m_score2 = score2;
+}
+
+inline Sol Tree::solution(Long_I treeInd = -1) const
+{
+	return node(def(treeInd)).m_sol;
+}
+
+inline void Tree::set_solution(Sol_I sol, Long_I treeInd = -1)
+{
+	node(def(treeInd)).m_sol = sol;
+}
+
+inline Bool Tree::solved(Long_I treeInd = -1) const
+{
+	Sol sol = solution(def(treeInd));
+	if (sol == Sol::GOOD || sol == Sol::BAD || sol == Sol::FAIR)
+		return true;
+	return false;
 }
 
 void Tree::calc_score(Long_I treeInd) // calculate territory and save to m_territory2

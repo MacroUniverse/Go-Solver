@@ -5,57 +5,111 @@ class Board;
 typedef const Board Board_I;
 
 // board configuration, not situation
+// origin at upper left corner, x axis points right, y axis points down
 // a board not processed by a transformation is called a raw board (raw_board), make this clear in function arguments!
 // TODO: implement operator << for move
 // TODO: use a better comparation rule so that rotations of a board are considered equal, otherwise unequal
 class Board
 {
-public:
+private:
+	// === data member ===
 	Matrix<Who> m_data;
 
-	// TODO: can these be non member ?
-	static MatChar m_mark; // 0: unmarked, 1: marked, else: not used yet
-	static vector<Move> m_group; // a group of connected stones
-	static Int m_qi; // qi of group
+public:
 
-	Board() {}
+	// === constructors ===
+	Board() {} // no data
 
-	Board(Char_I Nx, Char_I Ny) : m_data(Nx, Ny)
-	{
-		m_data = Who::NONE; m_mark.resize(Nx, Ny); m_mark = 0;
-	}
+	Board(Char_I Nx, Char_I Ny); // create empty board
 
-	inline Bool operator==(Board_I &rhs) const
-	{
-		return m_data == rhs.m_data;
-	}
+	// === const functions ===
 
-	inline void disp() const; // display board on screen
+	// get a stone by coordinate
+	Who operator()(Char_I x, Char_I y) const;
 
-	inline Int check(Char_I x, Char_I y, Who_I s) const;
+	// display board on screen
+	void disp() const;
 
-	inline Int place(Char_I x, Char_I y, Who_I s); // place stone
+	// check if a placing is legal, or how many stones will be dead
+	// same check already exists for place()
+	// Ko is not considered!
+	// if legal, return the number of stones that can be removed ( >= 0)
+	// return -1 if occupied, do nothing
+	// return -2 if no qi, do nothing
+	Int check(Char_I x, Char_I y, Who_I s) const;
 
-	inline void connect_init() const; // use before "connect()"
+	// get stones connected to a given stone (x,y) and calculate qi
+	// if (x,y) does not have a stone yet, specifying "who" can assume a stone is placed
+	// if (x,y) already have a stone, "who" argument is not used
+	// "mark" will mark connected stones and their qi.
+	// "group" has the coordinates of the connected stones
+	void connect(MatChar_O & mark, Int_O qi, vector<Move> /*_O*/ &group,
+		Char_I x, Char_I y, Who_I who = Who::DEFAULT) const;
 
-									  // get stones connected to a given stone (fill "m_group") and calculate qi
-	inline void connect(Char_I x, Char_I y, Who_I who = Who::DEFAULT) const;
+	// internal recursive function called by connect()
+	void connect0(MatChar_IO & mark, Int_IO qi, vector<Move> /*_IO*/ &group,
+		Char_I x, Char_I y) const;
 
-	// remove group if it is dead after placing (x,y)
-	inline void remove_group();
+	// remove a group of stone from the board
+	void remove_group(const vector<Move> &group);
 
-	inline Int calc_territory2(Who_I who) const; // calculate black score (multiplied by 2)
+	// calculate black territory doubled
+	// this is only accurate when only dumb eye filling exists
+	// X's territory = # X's stone on board + # single qi's surrounded by X + (other qi's not surrounded by Y)/2
+	Int calc_territory2(Who_I who) const;
 
-	inline Bool is_eye(Char_I x, Char_I y, Who_I who) const;
+	// is (x,y) an eye surrounded by who
+	Bool is_eye(Char_I x, Char_I y, Who_I who) const;
 
-	// check filling of an eye that's not in danger
-	inline Bool is_dumb_eye_filling(Char_I x, Char_I y, Who_I who) const;
+	// if filling of an eye that's not in danger
+	Bool is_dumb_eye_filling(Char_I x, Char_I y, Who_I who) const;
 
-	// filling big eye surrounded by connected stones
-	inline Bool is_dumb_2eye_filling(Char_I x, Char_I y, Who_I who) const;
+	// if filling a big eye surrounded by connected stones
+	Bool is_dumb_2eye_filling(Char_I x, Char_I y, Who_I who) const;
 
+	// decide the best transformations (rotation and stone color flipping) to make a configuration "largest"
+	// NONE:0 < WHITE:1 < BLACK:2
+	// return true: if needs to flip
+	// return false: if no need to flip
+	// output rot: times the board needs to rotate counter-clockwise
+	Bool calc_rot_flip_board(Int_O &rotation) const;
+
+	// get a stone after the board has been rotated and fliped
+	Who transform1(Char_I x, Char_I y, Int_I rot, Bool_I flip) const;
+
+	// === none-const functions ===
+
+	// return 0 if legal, and update board
+	// Ko is not considered! 
+	// return -1 if occupied, do nothing
+	// return -2 if no qi, do nothing
+	Int place(Char_I x, Char_I y, Who_I s);
+
+	// === destructor ===
 	~Board() {}
 };
+
+// === interface functions ===
+
+// compare two boards
+// return 1: board > board_raw
+// return 0: board == board_raw
+// return -1: board < board_raw
+// transformation will be performed on "board_raw", but not "board"
+inline Int operator-(Board_I &board, Board_I &board_raw);
+
+
+// === implementation ===
+
+inline Board::Board(Char_I Nx, Char_I Ny) : m_data(Nx, Ny)
+{
+	m_data = Who::NONE;
+}
+
+inline Who Board::operator()(Char_I x, Char_I y) const
+{
+	return m_data(x, y);
+}
 
 inline void Board::disp() const
 {
@@ -82,12 +136,7 @@ inline void Board::disp() const
 	}
 }
 
-// decide the best transformations (rotation and stone color flipping) to make a configuration "largest"
-// NONE:0 < WHITE:1 < BLACK:2
-// return true: if needs to flip
-// return false: if no need to flip
-// output rot: times the board needs to rotate counter-clockwise
-Bool calc_rot_flip_board(Int_O &rotation, Board_I &board)
+inline Bool Board::calc_rot_flip_board(Int_O &rotation) const
 {
 	Char x, y;
 	Int i, Nx = board_Nx(), Ny = board_Ny(), N = Nx * Ny, best;
@@ -125,7 +174,7 @@ Bool calc_rot_flip_board(Int_O &rotation, Board_I &board)
 			// evaluate (x, y) position for all transformations left
 			best = 0;
 			for (i = 0; i < val.size(); ++i) {
-				val[i] = who2int(transform1(x, y, rot[i], flip[i], board));
+				val[i] = who2int(transform1(x, y, rot[i], flip[i]));
 				if (best < val[i])
 					best = val[i];
 			}
@@ -152,8 +201,7 @@ Bool calc_rot_flip_board(Int_O &rotation, Board_I &board)
 	return flip[0];
 }
 
-// get a stone after the board has been rotated and fliped
-Who transform1(Char_I x, Char_I y, Int_I rot, Bool_I flip, Board_I &board)
+inline Who Board::transform1(Char_I x, Char_I y, Int_I rot, Bool_I flip) const
 {
 	Char x1, y1;
 	Who stone;
@@ -172,7 +220,7 @@ Who transform1(Char_I x, Char_I y, Int_I rot, Bool_I flip, Board_I &board)
 	else
 		error("illegal rotation!");
 
-	stone = board.m_data(x1, y1);
+	stone = m_data(x1, y1);
 	if (flip) {
 		if (stone == Who::WHITE)
 			return Who::BLACK;
@@ -181,37 +229,6 @@ Who transform1(Char_I x, Char_I y, Int_I rot, Bool_I flip, Board_I &board)
 	}
 }
 
-// compare two boards
-// return 1: board > board_raw
-// return 0: board == board_raw
-// return -1: board < board_raw
-// transformation will be performed on "board_raw", but not "board"
-Int operator-(Board_I &board, Board_I &board_raw)
-{
-	// rotation and inversion should make the board compare as big as possible
-	Char x, y;
-	Int rotation, Nx = board_Nx(), Ny = board_Ny(), N = Nx * Ny;
-	Int val, val_raw;
-	Bool flip = calc_rot_flip_board(rotation, board_raw);
-
-	for (y = 0; y < Ny; ++y) {
-		for (x = 0; x < Nx; ++x) {
-			val = who2int(board.m_data(x, y));
-			val_raw = who2int(transform1(x, y, rotation, flip, board_raw));
-			if (val == val_raw) continue;
-			if (val > val_raw) return 1;
-			return -1;
-		}
-	}
-	return false;
-}
-
-// check if a placing is legal, or how many stones will be dead
-// same check already exists for place()
-// Ko is not considered!
-// if legal, return the number of stones that can be removed ( >= 0)
-// return -1 if occupied, do nothing
-// return -2 if no qi, do nothing
 inline Int Board::check(Char_I x, Char_I y, Who_I who) const
 {
 #ifdef _CHECK_BOUND_
@@ -219,55 +236,50 @@ inline Int Board::check(Char_I x, Char_I y, Who_I who) const
 		error("Tree::place(x,y): out of bound!");
 #endif
 	Int Nx = board_Nx(), Ny = board_Ny(), Nremove = 0;
+
+	// output of connect()
+	MatChar mark(Nx, Ny); vector<Move> group; Int qi;
+
 	// check if already occupied
 	if (m_data(x, y) != Who::NONE)
 		return -1;
 
 	// search opponent's dead stones
 	// only necessary if placed next to opposite stone
-	connect_init();
 	if (x > 0 && m_data(x - 1, y) == next(who)) {
-		connect(x - 1, y);
-		if (m_qi == 1)
-			Nremove += m_group.size();
+		connect(mark, qi, group, x - 1, y);
+		if (qi == 1)
+			Nremove += group.size();
 	}
 
-	if (y > 0 && m_data(x, y - 1) == next(who) && !m_mark(x, y - 1)) {
-		connect_init();
-		connect(x, y - 1);
-		if (m_qi == 1)
-			Nremove += m_group.size();
+	if (y > 0 && m_data(x, y - 1) == next(who) && !mark(x, y - 1)) {
+		connect(mark, qi, group, x, y - 1);
+		if (qi == 1)
+			Nremove += group.size();
 	}
 
-	if (x < Nx - 1 && m_data(x + 1, y) == next(who) && !m_mark(x + 1, y)) {
-		connect_init();
-		connect(x + 1, y);
-		if (m_qi == 1)
-			Nremove += m_group.size();
+	if (x < Nx - 1 && m_data(x + 1, y) == next(who) && !mark(x + 1, y)) {
+		connect(mark, qi, group, x + 1, y);
+		if (qi == 1)
+			Nremove += group.size();
 	}
 
-	if (y < Ny - 1 && m_data(x, y + 1) == next(who) && !m_mark(x, y + 1)) {
-		connect_init();
-		connect(x, y + 1);
-		if (m_qi == 1)
-			Nremove += m_group.size();
+	if (y < Ny - 1 && m_data(x, y + 1) == next(who) && !mark(x, y + 1)) {
+		connect(mark, qi, group, x, y + 1);
+		if (qi == 1)
+			Nremove += group.size();
 	}
 
 	if (Nremove > 0)
 		return Nremove;
 
 	// check qi assuming stone is placed
-	connect_init();
-	connect(x, y, who);
-	if (m_qi == 0) return -2;
+	connect(mark, qi, group, x, y, who);
+	if (qi == 0) return -2;
 
 	return 0;
 }
 
-// return 0 if legal, and update board
-// Ko is not considered! 
-// return -1 if occupied, do nothing
-// return -2 if no qi, do nothing
 inline Int Board::place(Char_I x, Char_I y, Who_I who)
 {
 #ifdef _CHECK_BOUND_
@@ -276,6 +288,10 @@ inline Int Board::place(Char_I x, Char_I y, Who_I who)
 #endif
 	Int Nx = board_Nx(), Ny = board_Ny();
 	Bool removed = false;
+
+	// output of connect()
+	MatChar mark(Nx, Ny); vector<Move> group; Int qi;
+
 	// check if already occupied
 	if (m_data(x, y) != Who::NONE)
 		return -1;
@@ -285,122 +301,113 @@ inline Int Board::place(Char_I x, Char_I y, Who_I who)
 
 	// remove opponent's dead stones
 	// only necessary if placed next to opposite stone
-	connect_init();
 	if (x > 0 && m_data(x - 1, y) == next(who)) {
-		connect(x - 1, y);
-		if (m_qi == 0) {
-			remove_group(); removed = true;
+		connect(mark, qi, group, x - 1, y);
+		if (qi == 0) {
+			remove_group(group); removed = true;
 		}
 	}
 
-	if (y > 0 && m_data(x, y - 1) == next(who) && !m_mark(x, y - 1)) {
-		connect_init();
-		connect(x, y - 1);
-		if (m_qi == 0) {
-			remove_group(); removed = true;
+	if (y > 0 && m_data(x, y - 1) == next(who) && !mark(x, y - 1)) {
+		connect(mark, qi, group, x, y - 1);
+		if (qi == 0) {
+			remove_group(group); removed = true;
 		}
 	}
 
-	if (x < Nx - 1 && m_data(x + 1, y) == next(who) && !m_mark(x + 1, y)) {
-		connect_init();
-		connect(x + 1, y);
-		if (m_qi == 0) {
-			remove_group(); removed = true;
+	if (x < Nx - 1 && m_data(x + 1, y) == next(who) && !mark(x + 1, y)) {
+		connect(mark, qi, group, x + 1, y);
+		if (qi == 0) {
+			remove_group(group); removed = true;
 		}
 	}
 
-	if (y < Ny - 1 && m_data(x, y + 1) == next(who) && !m_mark(x, y + 1)) {
-		connect_init();
-		connect(x, y + 1);
-		if (m_qi == 0) {
-			remove_group(); removed = true;
+	if (y < Ny - 1 && m_data(x, y + 1) == next(who) && !mark(x, y + 1)) {
+		connect(mark, qi, group, x, y + 1);
+		if (qi == 0) {
+			remove_group(group); removed = true;
 		}
 	}
 
 	if (removed) return 0;
 
 	// check qi of placed stone
-	connect_init();
-	connect(x, y);
-	if (m_qi == 0) return -2;
+	connect(mark, qi, group, x, y);
+	if (qi == 0) return -2;
 
 	return 0;
 }
 
-inline void Board::connect_init() const
+inline void Board::connect(MatChar_O & mark, Int_O qi, vector<Move> /*_O*/ &group,
+	Char_I x, Char_I y, Who_I who = Who::DEFAULT) const
 {
-	m_mark = 0;
-	m_group.resize(0);
-	m_qi = 0;
+	// init output
+	mark = 0; group.resize(0); qi = 0;
+	// connect (x,y) recursively
+	connect0(mark, qi, group, x, y);
 }
 
-// get a group of stones with the same color that are connected to stone (x,y)
-// if (x, y) does not have a stone yet, specifying "who" can assume a stone is placed
-inline void Board::connect(Char_I x, Char_I y, Who_I who /*optional*/) const
+inline void Board::connect0(MatChar_IO & mark, Int_IO qi, vector<Move> /*_IO*/ &group,
+	Char_I x, Char_I y) const
 {
 	Char Nx = board_Nx(), Ny = board_Ny();
-	Who s, s0;
+	Who who, who0;
 	if (m_data(x, y) == Who::NONE) {
-		if (who == Who::DEFAULT)
-			error("must specify who argument!");
-		else
-			s0 = who;
+		error("cannot be empty!"); // debug
 	}
 	else
-		s0 = m_data(x, y);
-	m_group.push_back(Move(x, y));
-	m_mark(x, y) = 1;
+		who0 = m_data(x, y);
+	group.push_back(Move(x, y));
+	mark(x, y) = 1;
 
 	if (x > 0) {
-		s = m_data(x - 1, y);
-		Char & mark = m_mark(x - 1, y);
-		if (s == s0 && !mark)
-			connect(x - 1, y);
-		else if (s == Who::NONE && !mark) {
-			++m_qi; mark = 1;
+		who = m_data(x - 1, y);
+		Char & rmark = mark(x - 1, y);
+		if (who == who0 && !rmark)
+			connect0(mark, qi, group, x - 1, y);
+		else if (who == Who::NONE && !rmark) {
+			++qi; rmark = 1;
 		}
 	}
 
 	if (x < Nx - 1) {
-		s = m_data(x + 1, y);
-		Char & mark = m_mark(x + 1, y);
-		if (s == s0 && !mark)
-			connect(x + 1, y);
-		else if (s == Who::NONE && !mark) {
-			++m_qi; mark = 1;
+		who = m_data(x + 1, y);
+		Char & rmark = mark(x + 1, y);
+		if (who == who0 && !rmark)
+			connect0(mark, qi, group, x + 1, y);
+		else if (who == Who::NONE && !rmark) {
+			++qi; rmark = 1;
 		}
 	}
 
 	if (y > 0) {
-		s = m_data(x, y - 1);
-		Char & mark = m_mark(x, y - 1);
-		if (s == s0 && !mark)
-			connect(x, y - 1);
-		else if (s == Who::NONE && !mark) {
-			++m_qi; mark = 1;
+		who = m_data(x, y - 1);
+		Char & rmark = mark(x, y - 1);
+		if (who == who0 && !rmark)
+			connect0(mark, qi, group, x, y - 1);
+		else if (who == Who::NONE && !rmark) {
+			++qi; rmark = 1;
 		}
 	}
 
 	if (y < Ny - 1) {
-		s = m_data(x, y + 1);
-		Char & mark = m_mark(x, y + 1);
-		if (s == s0 && !mark)
-			connect(x, y + 1);
-		else if (s == Who::NONE && !mark) {
-			++m_qi; mark = 1;
+		who = m_data(x, y + 1);
+		Char & rmark = mark(x, y + 1);
+		if (who == who0 && !rmark)
+			connect0(mark, qi, group, x, y + 1);
+		else if (who == Who::NONE && !rmark) {
+			++qi; rmark = 1;
 		}
 	}
 }
 
-inline void Board::remove_group()
+inline void Board::remove_group(const vector<Move> &group)
 {
 	Int i;
-	for (i = 0; i < m_group.size(); ++i)
-		m_data(m_group[i].x(), m_group[i].y()) = Who::NONE;
+	for (i = 0; i < group.size(); ++i)
+		m_data(group[i].x(), group[i].y()) = Who::NONE;
 }
 
-// this will be accurate when no legal move exists
-// X territory = # X stone on board + # single qi's surrounded by X + (other qi's not surrounded by Y)/2
 inline Int Board::calc_territory2(Who_I who) const
 {
 	Char x, y, Nx = board_Nx(), Ny = board_Ny();
@@ -451,36 +458,35 @@ inline Bool Board::is_eye(Char_I x, Char_I y, Who_I who) const
 
 inline Bool Board::is_dumb_eye_filling(Char_I x, Char_I y, Who_I who) const
 {
-	// not my eye
+	// not my eye 
 	if (!is_eye(x, y, who)) return false;
 
 	Int Nx = board_Nx(), Ny = board_Ny();
 
+	// output of connect()
+	MatChar mark(Nx, Ny); vector<Move> group; Int qi;
+
 	// check qi of sourrounding 4 stones
 	// if only 1 qi, it's not dumb
 
-	connect_init();
 	if (x > 0) {
-		connect(x - 1, y);
-		if (m_qi == 1) return false;
+		connect(mark, qi, group, x - 1, y);
+		if (qi == 1) return false;
 	}
 
-	if (y > 0 && !m_mark(x, y - 1)) {
-		connect_init();
-		connect(x, y - 1);
-		if (m_qi == 1) return false;
+	if (y > 0 && !mark(x, y - 1)) {
+		connect(mark, qi, group, x, y - 1);
+		if (qi == 1) return false;
 	}
 
-	if (x < Nx - 1 && !m_mark(x + 1, y)) {
-		connect_init();
-		connect(x + 1, y);
-		if (m_qi == 1) return false;
+	if (x < Nx - 1 && !mark(x + 1, y)) {
+		connect(mark, qi, group, x + 1, y);
+		if (qi == 1) return false;
 	}
 
-	if (y < Ny - 1 && !m_mark(x, y + 1)) {
-		connect_init();
-		connect(x, y + 1);
-		if (m_qi == 1) return false;
+	if (y < Ny - 1 && !mark(x, y + 1)) {
+		connect(mark, qi, group, x, y + 1);
+		if (qi == 1) return false;
 	}
 
 	// it is dumb...
@@ -494,6 +500,9 @@ inline Bool Board::is_dumb_2eye_filling(Char_I x, Char_I y, Who_I who) const
 	Char x1, y1, x_qi, y_qi;
 	Bool qi = false, connected = false;
 
+	// output of connect()
+	MatChar mark(Nx, Ny); vector<Move> group; Int qi;
+
 	// check qi of sourrounding 3 stones and one qi
 
 	// check left
@@ -501,11 +510,10 @@ inline Bool Board::is_dumb_2eye_filling(Char_I x, Char_I y, Who_I who) const
 	if (x > 0) {
 		if (m_data(x1, y1) == who) {
 			if (connected) {
-				if (!m_mark(x1, y1)) return false; // black not connected
+				if (!mark(x1, y1)) return false; // black not connected
 			}
 			else {
-				connect_init();
-				connect(x1, y1);
+				connect(mark, qi, group, x1, y1);
 				connected = true;
 			}
 		}
@@ -522,11 +530,10 @@ inline Bool Board::is_dumb_2eye_filling(Char_I x, Char_I y, Who_I who) const
 	if (x < Nx - 1) {
 		if (m_data(x1, y1) == who) {
 			if (connected) {
-				if (!m_mark(x1, y1)) return false; // black not connected
+				if (!mark(x1, y1)) return false; // black not connected
 			}
 			else {
-				connect_init();
-				connect(x1, y1);
+				connect(mark, qi, group, x1, y1);
 				connected = true;
 			}
 		}
@@ -543,11 +550,10 @@ inline Bool Board::is_dumb_2eye_filling(Char_I x, Char_I y, Who_I who) const
 	if (y > 0) {
 		if (m_data(x1, y1) == who) {
 			if (connected) {
-				if (!m_mark(x1, y1)) return false; // black not connected
+				if (!mark(x1, y1)) return false; // black not connected
 			}
 			else {
-				connect_init();
-				connect(x1, y1);
+				connect(mark, qi, group, x1, y1);
 				connected = true;
 			}
 		}
@@ -564,11 +570,10 @@ inline Bool Board::is_dumb_2eye_filling(Char_I x, Char_I y, Who_I who) const
 	if (y < Ny - 1) {
 		if (m_data(x1, y1) == who) {
 			if (connected) {
-				if (!m_mark(x1, y1)) return false; // black not connected
+				if (!mark(x1, y1)) return false; // black not connected
 			}
 			else {
-				connect_init();
-				connect(x1, y1);
+				connect(mark, qi, group, x1, y1);
 				connected = true;
 			}
 		}
@@ -585,31 +590,51 @@ inline Bool Board::is_dumb_2eye_filling(Char_I x, Char_I y, Who_I who) const
 	// left
 	x1 = x_qi - 1; y1 = y_qi;
 	if (x_qi > 0 && !(x1 == x && y1 == y)) {
-		if (!(m_data(x1, y1) == who && m_mark(x1, y1)))
+		if (!(m_data(x1, y1) == who && mark(x1, y1)))
 			return false;
 	}
 
 	// right
 	x1 = x_qi + 1; y1 = y_qi;
 	if (x_qi < Nx - 1 && !(x1 == x && y1 == y)) {
-		if (!(m_data(x1, y1) == who && m_mark(x1, y1)))
+		if (!(m_data(x1, y1) == who && mark(x1, y1)))
 			return false;
 	}
 
 	// up
 	x1 = x_qi; y1 = y_qi - 1;
 	if (y_qi > 0 && !(x1 == x && y1 == y)) {
-		if (!(m_data(x1, y1) == who && m_mark(x1, y1)))
+		if (!(m_data(x1, y1) == who && mark(x1, y1)))
 			return false;
 	}
 
 	// down
 	x1 = x_qi; y1 = y_qi + 1;
 	if (y_qi < Ny - 1 && !(x1 == x && y1 == y)) {
-		if (!(m_data(x1, y1) == who && m_mark(x1, y1)))
+		if (!(m_data(x1, y1) == who && mark(x1, y1)))
 			return false;
 	}
 
 	// ok, it is dumb...
 	return true;
+}
+
+inline Int operator-(Board_I &board, Board_I &board_raw)
+{
+	// rotation and inversion should make the board compare as big as possible
+	Char x, y;
+	Int rotation, Nx = board_Nx(), Ny = board_Ny(), N = Nx * Ny;
+	Int val, val_raw;
+	Bool flip = board_raw.calc_rot_flip_board(rotation);
+
+	for (y = 0; y < Ny; ++y) {
+		for (x = 0; x < Nx; ++x) {
+			val = who2int(board(x, y));
+			val_raw = who2int(board_raw.transform1(x, y, rotation, flip));
+			if (val == val_raw) continue;
+			if (val > val_raw) return 1;
+			return -1;
+		}
+	}
+	return false;
 }
