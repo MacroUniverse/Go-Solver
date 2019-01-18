@@ -5,11 +5,11 @@ namespace slisc {
 // search ind so that v[ind] == s
 // same as lookupInt(), but Int operator-(v[i], s) must be implemented
 // operator-(v[i], s) only need to return the correct sign
-// if s is found, return 0, output ind
-// if s is not found and s < v[0], return -1
-// if s is not found and v[end] < s, return 1
-// if s is not found and v[0] < s < v[end], return -2 and output ind so that v[ind] < s < v[ind+1]
-// if v.size() < 1, return -3
+// return 0, output ind: if s is found
+// return -1: if s is not found and s < v[0]
+// return 1: if s is not found and v[end] < s
+// return -2: if s is not found and v[0] < s < v[end], output ind so that v[ind] < s < v[ind+1]
+// return -3: if v.size() < 1
 
 template <class T, class T1>
 Int lookupInt(Long_O &ind, const T1 &v, const T &s)

@@ -8,26 +8,50 @@
 // index to m_order is called (pool) order index (orderInd), this will change frequently for the same board!
 class Pool
 {
-public:
+private:
 	vector<Board> m_boards; // store all boards in the Pool
-	vector<Long> m_black_treeInd; // the corresponding node played by black
-	vector<Long> m_white_treeInd; // the corresponding node played by white
+	// the corresponding node played by black/white
+	// m_black_treeInd and m_white_treeInd should always be the same length and order of m_boards, use -1 if there is no link
+	vector<Long> m_black_treeInd;
+	vector<Long> m_white_treeInd;
 	vector<Long> m_order; // m_board[m_order[i]] is in sorted order
 
+public:
 	Pool() {}
 
 	Long size() const { return m_boards.size(); }
 
-	// get a board by index
+	// get a board reference by index
 	const Board & operator[](Long_I ind) const { return m_boards[m_order[ind]]; }
 
+	// get pool index from order index
+	Long poolInd(Long_I orderInd) const;
+
 	// search Pool: find poolInd so that m_board[poolInd] and raw_board have the same configuration
+	// return 0, output ind: if s is found
+	// return -1: if s is not found and board is too small
+	// return  1: if s is not found and board is too large
+	// return -2: if s is not found and board is in the middle, output ind so that m_pool[ind] < s < m_pool[ind+1]
+	// return -3: if m_pool.size() < 1
 	// TODO: improve implementation (stone by stone algorithm)
 	Int search(Long_O &poolInd, Long_O &orderInd, Board_I &raw_board);
 
-	// add a new board to the Pool
-	inline void push(Board_I &board, Int_I search_ret, Long_I orderInd, Long_I treeInd);
+	// add a new board (configuration) to the Pool
+	// orderInd is output by search() and search_ret is returned by search()
+	// orderInd should be -3, -2, -1 or 1
+	inline void push(Board_I &board, Int_I search_ret, Long_I orderInd, Who_I who, Long_I treeInd);
+
+	// add a new situation to an existing configuration
+	inline void link(Long_I orderInd, Who_I who, Long_I treeInd);
+
+	// return the treeInd of a situation
+	Long treeInd(Long_I poolInd, Who_I who) const;
 };
+
+Long Pool::poolInd(Long_I orderInd) const
+{
+	return m_order[orderInd];
+}
 
 Int Pool::search(Long_O &poolInd, Long_O &orderInd, Board_I &raw_board)
 {
@@ -37,12 +61,18 @@ Int Pool::search(Long_O &poolInd, Long_O &orderInd, Board_I &raw_board)
 	return ret;
 }
 
-// orderInd is output by search() and search_ret is returned by search()
-// orderInd should be -3, -2, -1 or 1
-inline void Pool::push(Board_I &board, Int_I search_ret, Long_I orderInd, Long_I treeInd)
+inline void Pool::push(Board_I &board, Int_I search_ret, Long_I orderInd, Who_I who, Long_I treeInd)
 {
 	m_boards.push_back(board);
-	m_treeInd.push_back(treeInd);
+	if (who == Who::BLACK) {
+		m_black_treeInd.push_back(treeInd);
+		m_white_treeInd.push_back(-1);
+	}
+	else if (who == Who::WHITE) {
+		m_black_treeInd.push_back(-1);
+		m_white_treeInd.push_back(treeInd);
+	}
+
 	Long poolInd = m_boards.size() - 1;
 	if (search_ret == -2)
 		m_order.insert(m_order.begin() + orderInd + 1, poolInd);
@@ -52,4 +82,34 @@ inline void Pool::push(Board_I &board, Int_I search_ret, Long_I orderInd, Long_I
 		m_order.push_back(poolInd);
 	else
 		error("Pool::push(): unknown search_ret!");
+}
+
+inline void Pool::link(Long_I orderInd, Who_I who, Long_I treeInd)
+{
+	Long poolInd = this->poolInd(orderInd);
+
+	if (who == Who::BLACK) {
+		if (m_black_treeInd[poolInd] > -1)
+			error("situation already exists!");
+		m_black_treeInd[poolInd] = treeInd;
+	}
+	else if (who == Who::WHITE) {
+		if (m_white_treeInd[poolInd] > -1)
+			error("situation already exists!");
+		m_white_treeInd[poolInd] = treeInd;
+	}
+	else
+		error("illegal who!");
+}
+
+Long Pool::treeInd(Long_I poolInd, Who_I who) const
+{
+	if (who == Who::BLACK) {
+		return m_black_treeInd[poolInd];
+	}
+	else if (who == Who::WHITE) {
+		return m_white_treeInd[poolInd];
+	}
+	else
+		error("illegal who!");
 }

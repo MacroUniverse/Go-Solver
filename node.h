@@ -46,10 +46,10 @@ public:
 	inline Bool is_next_ko(Int_I ind) const; // is this a ko link?
 
 											 // set
-	void init(Long_I poolInd)
+	void init()
 	{
 		m_last.resize(0); m_last.push_back(-1); m_last_mov.push_back(Move(Act::INIT));
-		m_who = Who::NONE; m_poolInd = poolInd;
+		m_who = Who::NONE; m_poolInd = -1;
 	}
 
 	void push_last(const Move &mov, Long_I treeInd) { m_last.push_back(treeInd); m_last_mov.push_back(mov); }

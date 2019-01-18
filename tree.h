@@ -186,15 +186,14 @@ const Board & Tree::get_board(Long_I treeInd = -1) const
 {
 	Long treeInd1 = def(treeInd);
 	Long poolInd = m_nodes[treeInd1].poolInd();
-	return m_pool.m_boards[poolInd];
+	return m_pool[poolInd];
 }
 
 // create 0-th node: empty board
 Tree::Tree() : m_treeInd(0)
 {
 	Board board(board_Nx(), board_Ny());
-	m_pool.push(board, -3, 0, 0);
-	Node node; node.init(m_pool.size() - 1);
+	Node node; node.init();
 	m_nodes.push_back(node);
 }
 
@@ -254,18 +253,58 @@ inline void Tree::disp_board(Long_I treeInd /*optional*/) const
 	cout << '\n' << endl;
 };
 
-// no need to check double pass, it will be handled as a ko
+// return 0 if new node created (++m_treeInd)
+// return 1 if linked to an existing node (m_treeInd jumped)
+// return -1 if illegal (nothing changes)
+// return -2 if a ko is found and linked (m_treeInd unchanged)
+// already has bound checking
 inline Int Tree::pass(Long_I treeInd /*optional*/)
 {
-	// check ko
-	...
-		// new configuration
-		Node node;
+	Int i, ret;
+	Node node;
 	const Long treeInd1 = def(treeInd);
-	node.pass(::next(who(treeInd1)), treeInd1, m_nodes[treeInd1].poolInd());
+
+	// check ko
+	Int search_ret;
+	Long orderInd, treeInd_found;
+	ret = check_ko(search_ret, treeInd_found, orderInd, treeInd1, board);
+
+	if (ret == -1) { // situation exists, not a ko
+		m_nodes[treeInd1].push_next(treeInd_found);
+		if (treeInd < 0) m_treeInd = treeInd_found;
+		return 1;
+	}
+	else if (ret == -2) { // situation exists, is a ko
+		error("unlikely case, check this!");
+	}
+	else if (ret == 0) { // configuration does not exist
+		error("impossible case, configuration must exist!");
+	}
+	else if (ret != -3)
+		error("unknown return!");
+
+	// ret == -3 now, configuration exists, new situation
+
+	// check double pass
+	for (i = 0; i < m_nodes[treeInd1].nlast(); ++i) {
+		if (m_nodes[treeInd1].move(i).ispass()) {
+			// double passed!
+			if (m_nodes[treeInd1].nlast() > 1)
+				error("unhandled case");
+			calc_score(treeInd1);
+			calc_sol(treeInd1);
+			set_
+		}
+	}
+
+	node.pass(::next(who(treeInd1)), treeInd1, m_nodes[treeInd_found].poolInd());
 	m_nodes.push_back(node);
 	m_nodes[treeInd1].push_next(nnode() - 1);
-	if (treeInd < 0) ++m_treeInd;
+	m_pool.link(orderInd, ::next(who(treeInd1)), nnode());
+
+	
+
+	if (treeInd < 0) m_treeInd = nnode() - 1;
 }
 
 // check if a placing is legal, or how many stones will be dead
@@ -304,7 +343,7 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 	// first move
 	if (treeInd1 == 0) {
 		board.place(x, y, Who::BLACK);
-		m_pool.push(board, -3, 0, treeInd1);
+		m_pool.push(board, -3, 0, Who::BLACK, treeInd1);
 		node.place(x, y, Who::BLACK, treeInd1, m_pool.size() - 1);
 		m_nodes.push_back(node);
 		m_nodes[treeInd1].push_next(nnode() - 1);
@@ -334,12 +373,13 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 		// ret == -3: not the same player, continue
 	}
 
-	// board is new
-	if (ret == -3) { // no need to push
+	// new situation
+	if (ret == -3) { // configuration exists
+		m_pool.link(orderInd, ::next(who(treeInd1)), nnode());
 		node.place(x, y, ::next(who(treeInd1)), treeInd1, m_nodes[treeInd_found].poolInd());
 	}
-	else { // push board to pool
-		m_pool.push(board, search_ret, orderInd, treeInd1 + 1);
+	else { // configuration does not exist
+		m_pool.push(board, search_ret, orderInd, ::next(who(treeInd1)), nnode());
 		node.place(x, y, ::next(who(treeInd1)), treeInd1, m_pool.size() - 1);
 	}
 
@@ -372,10 +412,10 @@ inline Int Tree::islinked(Long_I treeInd1, Long_I treeInd2)
 
 // 'nodes[treeInd]' will produce 'board' in the next move
 // if board already exists, output tree index of the same board
-// return 0 if this is a new configuration, otherwise:
-// return -1 if it is not a ko
-// return -2 if a ko is found
-// return -3 if this is a new situation
+// return 0 if this is a new configuration
+// return -1 if situation exists but not a ko
+// return -2 if situation exists and is a ko
+// return -3 if this is a new situation of an existing configuration
 inline Int Tree::check_ko(Int_O &search_ret, Long_O &treeInd_match, Long_O &orderInd, Long_I treeInd, Board_I &board)
 {
 	Long poolInd;
@@ -385,7 +425,7 @@ inline Int Tree::check_ko(Int_O &search_ret, Long_O &treeInd_match, Long_O &orde
 	if (search_ret == 0) {
 		if (who(treeInd_match) == who(treeInd))
 			return -3;
-		if (islinked(treeInd_same, treeInd))
+		if (islinked(treeInd_match, treeInd))
 			return -2; // Ko!
 		return -1; // no Ko
 	}

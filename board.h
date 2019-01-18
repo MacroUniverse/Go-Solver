@@ -53,10 +53,10 @@ public:
 	// remove a group of stone from the board
 	void remove_group(const vector<Move> &group);
 
-	// calculate black territory doubled
+	// calculate territory
 	// this is only accurate when only dumb eye filling exists
 	// X's territory = # X's stone on board + # single qi's surrounded by X + (other qi's not surrounded by Y)/2
-	Int calc_territory2(Who_I who) const;
+	Int calc_territory(Who_I who) const;
 
 	// is (x,y) an eye surrounded by who
 	Bool is_eye(Char_I x, Char_I y, Who_I who) const;
@@ -408,7 +408,7 @@ inline void Board::remove_group(const vector<Move> &group)
 		m_data(group[i].x(), group[i].y()) = Who::NONE;
 }
 
-inline Int Board::calc_territory2(Who_I who) const
+inline Int Board::calc_territory(Who_I who) const
 {
 	Char x, y, Nx = board_Nx(), Ny = board_Ny();
 	Int black = 0, qi = 0, common_qi = 0;
@@ -437,7 +437,7 @@ inline Int Board::calc_territory2(Who_I who) const
 			else if (s != next(who))
 				error("Board::result(): illegal stone!");
 		}
-	return 2 * (black + qi) + common_qi;
+	return black + qi + common_qi/2;
 }
 
 inline Bool Board::is_eye(Char_I x, Char_I y, Who_I who) const
