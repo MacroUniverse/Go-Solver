@@ -14,9 +14,9 @@ namespace slisc {
 template <class T, class T1>
 Int lookupInt(Long_O &ind, const T1 &v, const T &s)
 {
-	if (N < 1) return -3;
 	Int diff;
 	Long i, N = v.size(), ind1 = 0, ind2 = N - 1;
+	if (N < 1) return -3;
 	diff = v[0] - s;
 	if (diff > 0) return -1;
 	if (diff == 0) {

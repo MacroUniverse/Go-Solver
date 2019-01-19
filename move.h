@@ -56,7 +56,7 @@ public:
 
 inline Move::Move(Char_I x, Char_I y) : m_x(x), m_y(y)
 {
-#ifdef _CHECK_BOUND_
+#ifdef GOS_CHECK_BOUND
 	if (x < 0 || y < 0 || x >= board_Nx() || y >= board_Ny())
 		error("Move::Move(x, y): coord < 0 !");
 #endif
@@ -101,7 +101,7 @@ inline Bool Move::isinit() const
 
 inline Char Move::x() const
 {
-#ifdef _CHECK_BOUND_
+#ifdef GOS_CHECK_BOUND
 	if (m_x < 0) error("Move::x(): not a coord!");
 #endif
 	return m_x;
@@ -109,7 +109,7 @@ inline Char Move::x() const
 
 inline Char Move::y() const
 {
-#ifdef _CHECK_BOUND_
+#ifdef GOS_CHECK_BOUND
 	if (m_x < 0) error("Move::y(): not a coord!");
 #endif
 	return m_y;
@@ -125,7 +125,7 @@ Bool Move::operator==(const Move &rhs) const
 
 inline void Move::place(Char_I x, Char_I y)
 {
-#ifdef _CHECK_BOUND_
+#ifdef GOS_CHECK_BOUND
 	if (x < 0 || y < 0 || x >= board_Nx() || y >= board_Ny())
 		error("Move::Move(x, y): coord < 0 !");
 #endif

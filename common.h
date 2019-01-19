@@ -7,6 +7,7 @@
 
 #ifndef NDEBUG
 #define _RAND_SEED_ 0
+#define GOS_CHECK_BOUND
 #endif
 
 #include "SLISC/slisc.h"
@@ -21,6 +22,7 @@ using std::cin; using std::endl;
 
 enum class Who : Char { NONE, WHITE, BLACK, DEFAULT, DRAW }; // TODO: make this a char type
 typedef const Who Who_I;
+typedef Who Who_IO, Who_O;
 
 enum class Act : Char { PLACE, PASS, EDIT, INIT }; // TODO: make this a char type
 typedef const Act Act_I;
@@ -111,4 +113,82 @@ inline Sol inv_sol(Sol_I sol)
 		return Sol::GOOD;
 	// KO_ONLY or UNKNOWN
 	return sol;
+}
+
+// board transformation
+class Trans
+{
+private:
+	Int m_rot;
+	Bool m_flip;
+public:
+	Trans(): m_rot(0), m_flip(0) {};
+	Trans(Int_I rot, Bool_I flip): m_rot(rot), m_flip(flip) {}
+	Int rot() const { return m_rot; }
+	Bool flip() const { return m_flip; }
+	void set_rot(Int_I rot) { m_rot = rot; }
+	void set_flip(Bool_I flip) { m_flip = flip; }
+};
+
+typedef Trans Trans_O, Trans_IO;
+typedef const Trans Trans_I;
+
+// get inverse transform
+inline Trans inv(Trans_I trans)
+{
+	Trans out = trans;
+	if (out.rot() != 0)
+		out.set_rot(4 - trans.rot());
+	return out;
+}
+
+// transform coordinates
+inline void transf(Char_IO &x, Char_IO &y, Who_O &who, Trans trans)
+{
+	Char temp;
+	if (trans.rot() == 1) {
+		temp = x; x = y; y = -temp;
+	}
+	else if (trans.rot() == 2) {
+		x = -x; y = -y;
+	}
+	else if (trans.rot() == 3) {
+		temp = x; x = -y; y = temp;
+	}
+	if (trans.flip)
+		who = next(who);
+}
+
+// inverse transform coordinates
+inline void inv_transf(Char_IO &x, Char_IO &y, Who_O &who, Trans trans)
+{
+	Char temp;
+	if (trans.rot() == 1) {
+		temp = x; x = -y; y = temp;
+	}
+	else if (trans.rot() == 2) {
+		x = -x; y = -y;
+	}
+	else if (trans.rot() == 3) {
+		temp = x; x = y; y = -temp;
+	}
+	if (trans.flip)
+		who = next(who);
+}
+
+// calculate trans1 += trans2
+inline void operator+=(Trans_IO &trans1, Trans_I trans2)
+{
+	trans1.set_rot((trans1.rot() + trans2.rot()) % 4);
+	if (trans2.flip())
+		trans1.set_flip(!trans1.flip());
+}
+
+
+// calculate trans1 -= trans2
+inline void operator-=(Trans_IO &trans1, Trans_I trans2)
+{
+	trans1.set_rot((trans1.rot() - trans2.rot())%4);
+	if (trans2.flip())
+		trans1.set_flip(!trans1.flip());
 }

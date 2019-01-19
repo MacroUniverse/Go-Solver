@@ -9,7 +9,7 @@
 class Pool
 {
 private:
-	vector<Board> m_boards; // store all boards in the Pool
+	vector<Config> m_boards; // store all boards in the Pool
 	// the corresponding node played by black/white
 	// m_black_treeInd and m_white_treeInd should always be the same length and order of m_boards, use -1 if there is no link
 	vector<Long> m_black_treeInd;
@@ -22,7 +22,7 @@ public:
 	Long size() const { return m_boards.size(); }
 
 	// get a board reference by index
-	const Board & operator[](Long_I ind) const { return m_boards[m_order[ind]]; }
+	const Config & operator[](Long_I ind) const { return m_boards[m_order[ind]]; }
 
 	// get pool index from order index
 	Long poolInd(Long_I orderInd) const;
@@ -34,15 +34,18 @@ public:
 	// return -2: if s is not found and board is in the middle, output ind so that m_pool[ind] < s < m_pool[ind+1]
 	// return -3: if m_pool.size() < 1
 	// TODO: improve implementation (stone by stone algorithm)
-	Int search(Long_O &poolInd, Long_O &orderInd, Board_I &raw_board);
+	// output flip and rotation calculated by Config::calc_trans()
+	Int search(Config_O &board, Int_O &rotation, Bool_O &flip, Long_O &poolInd, Long_O &orderInd, RawBoard_I &raw_board);
 
 	// add a new board (configuration) to the Pool
+	// the board must already be transformed
 	// orderInd is output by search() and search_ret is returned by search()
 	// orderInd should be -3, -2, -1 or 1
-	inline void push(Board_I &board, Int_I search_ret, Long_I orderInd, Who_I who, Long_I treeInd);
+	// flip and rotation are calculated by Config::calc_rot_flip()
+	void push(Config_I &board, Int_I search_ret, Long_I orderInd, Who_I who, Long_I treeInd);
 
 	// add a new situation to an existing configuration
-	inline void link(Long_I orderInd, Who_I who, Long_I treeInd);
+	void link(Long_I orderInd, Who_I who, Long_I treeInd);
 
 	// return the treeInd of a situation
 	Long treeInd(Long_I poolInd, Who_I who) const;
@@ -53,17 +56,22 @@ Long Pool::poolInd(Long_I orderInd) const
 	return m_order[orderInd];
 }
 
-Int Pool::search(Long_O &poolInd, Long_O &orderInd, Board_I &raw_board)
+Int Pool::search(Config_O &board, Trans_O &trans, Long_O &poolInd, Long_O &orderInd, RawBoard_I &raw_board)
 {
-	Int ret = lookupInt(orderInd, *this, raw_board);
+	trans = raw_board.calc_trans();
+	Config board;
+	raw_board.transform(board, rotation, flip);
+	Int ret = lookupInt(orderInd, *this, board);
 	if (ret == 0)
 		poolInd = m_order[orderInd];
 	return ret;
 }
 
-inline void Pool::push(Board_I &board, Int_I search_ret, Long_I orderInd, Who_I who, Long_I treeInd)
+inline void Pool::push(Config_I &board, Int_I search_ret, Long_I orderInd, Who_I who, Long_I treeInd)
 {
+	// transform the board first!
 	m_boards.push_back(board);
+
 	if (who == Who::BLACK) {
 		m_black_treeInd.push_back(treeInd);
 		m_white_treeInd.push_back(-1);

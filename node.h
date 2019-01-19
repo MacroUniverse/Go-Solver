@@ -13,7 +13,12 @@ private:
 	vector<Long> m_last; // for 0-th node: undefined
 	vector<Move> m_last_mov; // moves of m_last that leads to this node
 	Long m_poolInd; // pool index, board stored in Pool::m_board[m_pool_ind]
+
 public:
+	// transformations needed when retrieving board from pool
+	Int m_rotation; // counter clock-wise
+	Bool m_flip_color; // inverse color of all stones
+
 	// solution related
 	Sol m_sol; // Sol::GOOD/Sol::BAD/Sol::FAIR
 	Int m_score2; // an over-estimation of final score (two gods playing), -1 means unclear
@@ -45,11 +50,11 @@ public:
 	inline Bool isend() const; // is this a bottom node (end of game)?
 	inline Bool is_next_ko(Int_I ind) const; // is this a ko link?
 
-											 // set
+	// set 0-th node (empty board)
 	void init()
 	{
 		m_last.resize(0); m_last.push_back(-1); m_last_mov.push_back(Move(Act::INIT));
-		m_who = Who::NONE; m_poolInd = -1;
+		m_who = Who::NONE; m_poolInd = 0;
 	}
 
 	void push_last(const Move &mov, Long_I treeInd) { m_last.push_back(treeInd); m_last_mov.push_back(mov); }

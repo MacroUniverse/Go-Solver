@@ -24,8 +24,9 @@ public:
 
 	// === const functions ===
 
-	// return Board reference of a node
-	const Board & get_board(Long_I treeInd = -1) const;
+	// return a reference to the transformed Board of a node
+	// rotation and flip are transformations needed to transform the board back
+	const Board & get_board(Int_O &rotation, Bool_O &flip, Long_I treeInd = -1) const;
 
 	Long index() const { return m_treeInd; } // return current node index
 
@@ -182,9 +183,11 @@ public:
 	~Tree() {}
 };
 
-const Board & Tree::get_board(Long_I treeInd = -1) const
+const Board & Tree::get_board(Int_O &rotation, Bool_O &flip, Long_I treeInd) const
 {
 	Long treeInd1 = def(treeInd);
+	rotation = m_nodes[treeInd1].m_rotation;
+	flip = m_nodes[treeInd1].m_flip;
 	Long poolInd = m_nodes[treeInd1].poolInd();
 	return m_pool[poolInd];
 }
@@ -195,6 +198,7 @@ Tree::Tree() : m_treeInd(0)
 	Board board(board_Nx(), board_Ny());
 	Node node; node.init();
 	m_nodes.push_back(node);
+	m_pool.push(board, -3, 0, Who::BLACK, 0);
 }
 
 inline Bool Tree::isend(Long_I treeInd /*optional*/) const
@@ -263,6 +267,23 @@ inline Int Tree::pass(Long_I treeInd /*optional*/)
 	Int i, ret;
 	Node node;
 	const Long treeInd1 = def(treeInd);
+	const Board & board = get_board(treeInd1);
+
+	// check double pass
+	for (i = 0; i < m_nodes[treeInd1].nlast(); ++i) {
+		if (m_nodes[treeInd1].move(i).ispass()) {
+			// double passed!
+			if (m_nodes[treeInd1].nlast() > 1)
+				error("unhandled case!");
+			if (!board.is_game_end())
+				error("unhandled case!");
+			// two situations have the same scores and solutions!
+			calc_score(treeInd1);
+			calc_sol(treeInd1);
+			set_score2(score2(treeInd1), last(i));
+			set_solution(solution(treeInd1), last(i));
+		}
+	}
 
 	// check ko
 	Int search_ret;
@@ -285,17 +306,7 @@ inline Int Tree::pass(Long_I treeInd /*optional*/)
 
 	// ret == -3 now, configuration exists, new situation
 
-	// check double pass
-	for (i = 0; i < m_nodes[treeInd1].nlast(); ++i) {
-		if (m_nodes[treeInd1].move(i).ispass()) {
-			// double passed!
-			if (m_nodes[treeInd1].nlast() > 1)
-				error("unhandled case");
-			calc_score(treeInd1);
-			calc_sol(treeInd1);
-			set_
-		}
-	}
+	
 
 	node.pass(::next(who(treeInd1)), treeInd1, m_nodes[treeInd_found].poolInd());
 	m_nodes.push_back(node);
@@ -343,7 +354,7 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 	// first move
 	if (treeInd1 == 0) {
 		board.place(x, y, Who::BLACK);
-		m_pool.push(board, -3, 0, Who::BLACK, treeInd1);
+		m_pool.push(board, 1, -1, Who::BLACK, 1);
 		node.place(x, y, Who::BLACK, treeInd1, m_pool.size() - 1);
 		m_nodes.push_back(node);
 		m_nodes[treeInd1].push_next(nnode() - 1);
@@ -916,24 +927,24 @@ inline Int Tree::score2(Long_I treeInd) const
 	return sco2;
 }
 
-inline void Tree::set_score2(Int score2, Long_I treeInd = -1)
+inline void Tree::set_score2(Int score2, Long_I treeInd)
 {
 	if (score2 < 0 || score2 > 2 * board_Nx() * board_Ny())
 		error("illegal score");
 	node(def(treeInd)).m_score2 = score2;
 }
 
-inline Sol Tree::solution(Long_I treeInd = -1) const
+inline Sol Tree::solution(Long_I treeInd) const
 {
 	return node(def(treeInd)).m_sol;
 }
 
-inline void Tree::set_solution(Sol_I sol, Long_I treeInd = -1)
+inline void Tree::set_solution(Sol_I sol, Long_I treeInd)
 {
 	node(def(treeInd)).m_sol = sol;
 }
 
-inline Bool Tree::solved(Long_I treeInd = -1) const
+inline Bool Tree::solved(Long_I treeInd) const
 {
 	Sol sol = solution(def(treeInd));
 	if (sol == Sol::GOOD || sol == Sol::BAD || sol == Sol::FAIR)
