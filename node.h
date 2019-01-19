@@ -13,11 +13,9 @@ private:
 	vector<Long> m_last; // for 0-th node: undefined
 	vector<Move> m_last_mov; // moves of m_last that leads to this node
 	Long m_poolInd; // pool index, board stored in Pool::m_board[m_pool_ind]
+	Trans m_trans; // transformations needed for the config
 
 public:
-	// transformations needed when retrieving board from pool
-	Int m_rotation; // counter clock-wise
-	Bool m_flip_color; // inverse color of all stones
 
 	// solution related
 	Sol m_sol; // Sol::GOOD/Sol::BAD/Sol::FAIR
@@ -43,6 +41,10 @@ public:
 	}
 	Int parent(Long_I treeInd) const; // search a parent by tree index
 	Long poolInd() const { return m_poolInd; }
+	const Trans & trans() const
+	{
+		return m_trans;
+	}
 	Int nlast() const { return m_last.size(); }
 	Long last(Int_I ind) const { return m_last[ind]; }
 	Int nnext() const { return m_next.size(); }

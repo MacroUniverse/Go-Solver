@@ -122,7 +122,7 @@ private:
 	Int m_rot;
 	Bool m_flip;
 public:
-	Trans(): m_rot(0), m_flip(0) {};
+	Trans(): m_rot(0), m_flip(false) {};
 	Trans(Int_I rot, Bool_I flip): m_rot(rot), m_flip(flip) {}
 	Int rot() const { return m_rot; }
 	Bool flip() const { return m_flip; }

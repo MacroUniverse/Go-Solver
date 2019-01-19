@@ -35,14 +35,14 @@ public:
 	// return -3: if m_pool.size() < 1
 	// TODO: improve implementation (stone by stone algorithm)
 	// output flip and rotation calculated by Config::calc_trans()
-	Int search(Config_O &board, Int_O &rotation, Bool_O &flip, Long_O &poolInd, Long_O &orderInd, RawBoard_I &raw_board);
+	Int search(Long_O &poolInd, Long_O &orderInd, Config_I &board);
 
-	// add a new board (configuration) to the Pool
+	// move a config to the Pool (config will be destroyed)
 	// the board must already be transformed
 	// orderInd is output by search() and search_ret is returned by search()
 	// orderInd should be -3, -2, -1 or 1
 	// flip and rotation are calculated by Config::calc_rot_flip()
-	void push(Config_I &board, Int_I search_ret, Long_I orderInd, Who_I who, Long_I treeInd);
+	void push(Config_IO &config, Int_I search_ret, Long_I orderInd, Who_I who, Long_I treeInd);
 
 	// add a new situation to an existing configuration
 	void link(Long_I orderInd, Who_I who, Long_I treeInd);
@@ -56,21 +56,18 @@ Long Pool::poolInd(Long_I orderInd) const
 	return m_order[orderInd];
 }
 
-Int Pool::search(Config_O &board, Trans_O &trans, Long_O &poolInd, Long_O &orderInd, RawBoard_I &raw_board)
+Int Pool::search(Long_O &poolInd, Long_O &orderInd, Config_I &config)
 {
-	trans = raw_board.calc_trans();
-	Config board;
-	raw_board.transform(board, rotation, flip);
-	Int ret = lookupInt(orderInd, *this, board);
+	Int ret = lookupInt(orderInd, *this, config);
 	if (ret == 0)
 		poolInd = m_order[orderInd];
 	return ret;
 }
 
-inline void Pool::push(Config_I &board, Int_I search_ret, Long_I orderInd, Who_I who, Long_I treeInd)
+inline void Pool::push(Config_IO &config, Int_I search_ret, Long_I orderInd, Who_I who, Long_I treeInd)
 {
 	// transform the board first!
-	m_boards.push_back(board);
+	m_boards.push_back(Config()); m_boards.back() << config;
 
 	if (who == Who::BLACK) {
 		m_black_treeInd.push_back(treeInd);

@@ -1,6 +1,7 @@
 #pragma once
 #include "node.h"
 #include "pool.h"
+#include "boardref.h"
 
 // game tree
 // a tree index is an index for m_nodes (treeInd), this index should never change for the same node
@@ -26,7 +27,7 @@ public:
 
 	// return a reference to the transformed Board of a node
 	// rotation and flip are transformations needed to transform the board back
-	const Board & get_board(Int_O &rotation, Bool_O &flip, Long_I treeInd = -1) const;
+	BoardRef get_board(Long_I treeInd = -1) const;
 
 	Long index() const { return m_treeInd; } // return current node index
 
@@ -88,7 +89,7 @@ public:
 	inline Int islinked(Long_I treeInd1, Long_I treeInd2); // check if node treeInd1 can lead to node treeInd2
 
 														   // check if same board already exists in the Pool and decide if it is a Ko
-	inline Int check_ko(Int_O &search_ret, Long_O &treeInd_match, Long_O &orderInd, Long_I treeInd, Board_I &board);
+	inline Int check_ko(Int_O &search_ret, Long_O &treeInd_match, Long_O &orderInd, Long_I treeInd, Config_I &config);
 
 	inline void branch(vector<Long> &br, Long_I treeInd = -1); // get an index vector of the a branch ending at a node
 
@@ -183,22 +184,19 @@ public:
 	~Tree() {}
 };
 
-const Board & Tree::get_board(Int_O &rotation, Bool_O &flip, Long_I treeInd) const
+BoardRef Tree::get_board(Long_I treeInd) const
 {
 	Long treeInd1 = def(treeInd);
-	rotation = m_nodes[treeInd1].m_rotation;
-	flip = m_nodes[treeInd1].m_flip;
-	Long poolInd = m_nodes[treeInd1].poolInd();
-	return m_pool[poolInd];
+	BoardRef board_ref(m_pool[m_nodes[treeInd1].poolInd()] ,m_nodes[treeInd1].trans());
+	return board_ref;
 }
 
 // create 0-th node: empty board
 Tree::Tree() : m_treeInd(0)
 {
-	Board board(board_Nx(), board_Ny());
-	Node node; node.init();
-	m_nodes.push_back(node);
-	m_pool.push(board, -3, 0, Who::BLACK, 0);
+	Config config; config.init();
+	m_pool.push(config, -3, 0, Who::BLACK, 0);
+	m_nodes.push_back(Node()); m_nodes.back().init();
 }
 
 inline Bool Tree::isend(Long_I treeInd /*optional*/) const
@@ -265,9 +263,8 @@ inline void Tree::disp_board(Long_I treeInd /*optional*/) const
 inline Int Tree::pass(Long_I treeInd /*optional*/)
 {
 	Int i, ret;
-	Node node;
 	const Long treeInd1 = def(treeInd);
-	const Board & board = get_board(treeInd1);
+	const BoardRef board = get_board(treeInd1);
 
 	// check double pass
 	for (i = 0; i < m_nodes[treeInd1].nlast(); ++i) {
@@ -288,7 +285,7 @@ inline Int Tree::pass(Long_I treeInd /*optional*/)
 	// check ko
 	Int search_ret;
 	Long orderInd, treeInd_found;
-	ret = check_ko(search_ret, treeInd_found, orderInd, treeInd1, board);
+	ret = check_ko(search_ret, treeInd_found, orderInd, treeInd1, board.config());
 
 	if (ret == -1) { // situation exists, not a ko
 		m_nodes[treeInd1].push_next(treeInd_found);
@@ -306,14 +303,10 @@ inline Int Tree::pass(Long_I treeInd /*optional*/)
 
 	// ret == -3 now, configuration exists, new situation
 
-	
-
-	node.pass(::next(who(treeInd1)), treeInd1, m_nodes[treeInd_found].poolInd());
-	m_nodes.push_back(node);
+	m_nodes.push_back(Node());
+	m_nodes.back().pass(::next(who(treeInd1)), treeInd1, m_nodes[treeInd_found].poolInd());
 	m_nodes[treeInd1].push_next(nnode() - 1);
 	m_pool.link(orderInd, ::next(who(treeInd1)), nnode());
-
-	
 
 	if (treeInd < 0) m_treeInd = nnode() - 1;
 }
@@ -328,15 +321,11 @@ inline Int Tree::check(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 {
 	Int ret;
 	const Long treeInd1 = def(treeInd);
-	Node node;
-	Board board;
-	board = get_board(treeInd1);
 	// first move
 	if (treeInd1 == 0)
 		return 0;
-
 	// update board and check illegal move (Ko no checked!)
-	return board.check(x, y, ::next(who(treeInd1)));
+	return get_board(treeInd1).check(x, y, ::next(who(treeInd1)));
 }
 
 // return 0 if new node created (m_treeInd++)
@@ -348,15 +337,14 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 {
 	Int ret;
 	const Long treeInd1 = def(treeInd);
-	Node node;
 	Board board;
 	board = get_board(treeInd1);
 	// first move
 	if (treeInd1 == 0) {
 		board.place(x, y, Who::BLACK);
-		m_pool.push(board, 1, -1, Who::BLACK, 1);
-		node.place(x, y, Who::BLACK, treeInd1, m_pool.size() - 1);
-		m_nodes.push_back(node);
+		m_pool.push(board.config(), 1, -1, Who::BLACK, 1);
+		m_nodes.push_back(Node());
+		m_nodes.back().place(x, y, Who::BLACK, treeInd1, m_pool.size() - 1);
 		m_nodes[treeInd1].push_next(nnode() - 1);
 		if (treeInd < 0) m_treeInd = 1;
 		return 0;
@@ -370,7 +358,7 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 	Int search_ret;
 	Long orderInd;
 	Long treeInd_found;
-	ret = check_ko(search_ret, treeInd_found, orderInd, treeInd1, board);
+	ret = check_ko(search_ret, treeInd_found, orderInd, treeInd1, board.config());
 	if (ret < 0) { // board already exists
 		if (ret == -1) { // not a ko
 			m_nodes[treeInd1].push_next(treeInd_found);
@@ -385,17 +373,19 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 	}
 
 	// new situation
+	m_nodes.push_back(Node());
+
 	if (ret == -3) { // configuration exists
 		m_pool.link(orderInd, ::next(who(treeInd1)), nnode());
-		node.place(x, y, ::next(who(treeInd1)), treeInd1, m_nodes[treeInd_found].poolInd());
+		m_nodes.back().place(x, y, ::next(who(treeInd1)), treeInd1, m_nodes[treeInd_found].poolInd());
 	}
 	else { // configuration does not exist
-		m_pool.push(board, search_ret, orderInd, ::next(who(treeInd1)), nnode());
-		node.place(x, y, ::next(who(treeInd1)), treeInd1, m_pool.size() - 1);
+		m_pool.push(board.config(), search_ret, orderInd, ::next(who(treeInd1)), nnode());
+		m_nodes.back().place(x, y, ::next(who(treeInd1)), treeInd1, m_pool.size() - 1);
 	}
 
 	// add Node to tree
-	m_nodes.push_back(node);
+	
 	m_nodes[treeInd1].push_next(nnode() - 1);
 	if (treeInd<0) ++m_treeInd;
 	return 0;
@@ -427,10 +417,10 @@ inline Int Tree::islinked(Long_I treeInd1, Long_I treeInd2)
 // return -1 if situation exists but not a ko
 // return -2 if situation exists and is a ko
 // return -3 if this is a new situation of an existing configuration
-inline Int Tree::check_ko(Int_O &search_ret, Long_O &treeInd_match, Long_O &orderInd, Long_I treeInd, Board_I &board)
+inline Int Tree::check_ko(Int_O &search_ret, Long_O &treeInd_match, Long_O &orderInd, Long_I treeInd, Config_I &config)
 {
 	Long poolInd;
-	search_ret = m_pool.search(poolInd, orderInd, board);
+	search_ret = m_pool.search(poolInd, orderInd, config);
 	treeInd_match = m_pool.treeInd(poolInd, who(treeInd));
 	// board already exists
 	if (search_ret == 0) {

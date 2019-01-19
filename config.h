@@ -92,7 +92,7 @@ public:
 
 	// === none-const functions ===
 
-	void init();
+	void init(); // init to an empty board
 
 	// move internal data from one config to another without copying
 	void operator<<(Config_IO &rhs);
