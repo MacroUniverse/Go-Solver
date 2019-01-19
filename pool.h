@@ -21,8 +21,17 @@ public:
 
 	Long size() const { return m_boards.size(); }
 
-	// get a board reference by index
-	const Config & operator[](Long_I ind) const { return m_boards[m_order[ind]]; }
+	// get a board reference by order index
+	const Config & operator[](Long_I orderInd) const
+	{
+		return m_boards[m_order[orderInd]];
+	}
+
+	// get a board reference by pool index
+	const Config & operator()(Long_I poolInd) const
+	{
+		return m_boards[poolInd];
+	}
 
 	// get pool index from order index
 	Long poolInd(Long_I orderInd) const;
@@ -48,6 +57,7 @@ public:
 	void link(Long_I orderInd, Who_I who, Long_I treeInd);
 
 	// return the treeInd of a situation
+	// return -1 if situation does not exist
 	Long treeInd(Long_I poolInd, Who_I who) const;
 };
 
@@ -76,6 +86,12 @@ inline void Pool::push(Config_IO &config, Int_I search_ret, Long_I orderInd, Who
 	else if (who == Who::WHITE) {
 		m_black_treeInd.push_back(-1);
 		m_white_treeInd.push_back(treeInd);
+	}
+	else { // for 0-th node
+		if (treeInd != 0)
+			error("only 0-th node can have Who::NONE!");
+		m_black_treeInd.push_back(0);
+		m_white_treeInd.push_back(0);
 	}
 
 	Long poolInd = m_boards.size() - 1;

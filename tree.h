@@ -80,6 +80,10 @@ public:
 
 	inline void disp_board(Long_I treeInd = -1) const; // display board
 
+	// return 0 if new node created
+	// return -1 if double pass caused game end
+	// return -2 if double pass attempted but game did not finish (nothing done)
+	// return 1 if linked to an another existing node
 	inline Int pass(Long_I treeInd = -1);
 
 	inline Int check(Char_I x, Char_I y, Long_I treeInd = -1);
@@ -132,6 +136,7 @@ public:
 	// using rand_smart_move() to generate moves until a better one is available
 	// assuming there is no branch after treeInd for now
 	// return 0 if successful
+	// return 1 if double pass (two nodes linked by the first pass both solved)
 	// return -1 if at least one downstream ko exists, and all other descendents have been solved
 	//           all downstream ko stored in Tree::m_ko_treeInds, best downstream solution stored in Tree::m_ko_best
 	inline Int solve(Long_I treeInd = -1);
@@ -187,7 +192,9 @@ public:
 BoardRef Tree::get_board(Long_I treeInd) const
 {
 	Long treeInd1 = def(treeInd);
-	BoardRef board_ref(m_pool[m_nodes[treeInd1].poolInd()] ,m_nodes[treeInd1].trans());
+	const Config & config = m_pool(m_nodes[treeInd1].poolInd());
+	const Trans & trans = m_nodes[treeInd1].trans();
+	BoardRef board_ref(config, trans);
 	return board_ref;
 }
 
@@ -195,7 +202,7 @@ BoardRef Tree::get_board(Long_I treeInd) const
 Tree::Tree() : m_treeInd(0)
 {
 	Config config; config.init();
-	m_pool.push(config, -3, 0, Who::BLACK, 0);
+	m_pool.push(config, -3, 0, Who::NONE, 0);
 	m_nodes.push_back(Node()); m_nodes.back().init();
 }
 
@@ -231,6 +238,7 @@ inline void Tree::disp_board(Long_I treeInd /*optional*/) const
 	Long treeInd1 = def(treeInd);
 	const Node & node = m_nodes[treeInd1];
 	for (i = 0; i < nlast(treeInd1); ++i) {
+		cout << i << ": ";
 		if (node.isinit())
 			cout << "(empty)";
 		else {
@@ -242,24 +250,19 @@ inline void Tree::disp_board(Long_I treeInd /*optional*/) const
 				error("Tree:disp(): illegal side name!");
 
 			if (node.ispass(i))
-				cout << "pass)";
+				cout << "pass)" << endl;
 			else if (node.isedit(i))
-				cout << "edit board)";
-			else
-				cout << "[" << Int(node.x(i)) << "," << Int(node.y(i)) << "] )";
+				cout << "edit board)" << endl;
+			else {
+				cout << "[" << Int(node.x(i)) << "," << Int(node.y(i)) << "])" << endl;
+			}
 		}
 	}
 
-	cout << "\n";
 	get_board(treeInd1).disp();
 	cout << '\n' << endl;
 };
 
-// return 0 if new node created (++m_treeInd)
-// return 1 if linked to an existing node (m_treeInd jumped)
-// return -1 if illegal (nothing changes)
-// return -2 if a ko is found and linked (m_treeInd unchanged)
-// already has bound checking
 inline Int Tree::pass(Long_I treeInd /*optional*/)
 {
 	Int i, ret;
@@ -273,12 +276,13 @@ inline Int Tree::pass(Long_I treeInd /*optional*/)
 			if (m_nodes[treeInd1].nlast() > 1)
 				error("unhandled case!");
 			if (!board.is_game_end())
-				error("unhandled case!");
+				return -2;
 			// two situations have the same scores and solutions!
 			calc_score(treeInd1);
 			calc_sol(treeInd1);
-			set_score2(score2(treeInd1), last(i));
-			set_solution(solution(treeInd1), last(i));
+			set_score2(inv_score2(score2(treeInd1)), last(treeInd1, i));
+			set_solution(inv_sol(solution(treeInd1)), last(treeInd1, i));
+			return -1;
 		}
 	}
 
@@ -304,11 +308,12 @@ inline Int Tree::pass(Long_I treeInd /*optional*/)
 	// ret == -3 now, configuration exists, new situation
 
 	m_nodes.push_back(Node());
-	m_nodes.back().pass(::next(who(treeInd1)), treeInd1, m_nodes[treeInd_found].poolInd());
+	m_nodes.back().pass(::next(who(treeInd1)), treeInd1, m_pool.poolInd(orderInd), board.trans());
 	m_nodes[treeInd1].push_next(nnode() - 1);
-	m_pool.link(orderInd, ::next(who(treeInd1)), nnode());
+	m_pool.link(orderInd, ::next(who(treeInd1)), nnode() - 1);
 
 	if (treeInd < 0) m_treeInd = nnode() - 1;
+	return 0;
 }
 
 // check if a placing is legal, or how many stones will be dead
@@ -344,7 +349,7 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 		board.place(x, y, Who::BLACK);
 		m_pool.push(board.config(), 1, -1, Who::BLACK, 1);
 		m_nodes.push_back(Node());
-		m_nodes.back().place(x, y, Who::BLACK, treeInd1, m_pool.size() - 1);
+		m_nodes.back().place(x, y, Who::BLACK, treeInd1, m_pool.size() - 1, board.trans());
 		m_nodes[treeInd1].push_next(nnode() - 1);
 		if (treeInd < 0) m_treeInd = 1;
 		return 0;
@@ -373,19 +378,17 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 	}
 
 	// new situation
-	m_nodes.push_back(Node());
+	m_nodes.push_back(Node()); // add Node to tree
 
 	if (ret == -3) { // configuration exists
-		m_pool.link(orderInd, ::next(who(treeInd1)), nnode());
-		m_nodes.back().place(x, y, ::next(who(treeInd1)), treeInd1, m_nodes[treeInd_found].poolInd());
+		m_pool.link(orderInd, ::next(who(treeInd1)), nnode() - 1);
+		m_nodes.back().place(x, y, ::next(who(treeInd1)), treeInd1, m_nodes[treeInd_found].poolInd(), board.trans());
 	}
 	else { // configuration does not exist
-		m_pool.push(board.config(), search_ret, orderInd, ::next(who(treeInd1)), nnode());
-		m_nodes.back().place(x, y, ::next(who(treeInd1)), treeInd1, m_pool.size() - 1);
+		m_pool.push(board.config(), search_ret, orderInd, ::next(who(treeInd1)), nnode() - 1);
+		m_nodes.back().place(x, y, ::next(who(treeInd1)), treeInd1, m_pool.size() - 1, board.trans());
 	}
 
-	// add Node to tree
-	
 	m_nodes[treeInd1].push_next(nnode() - 1);
 	if (treeInd<0) ++m_treeInd;
 	return 0;
@@ -411,25 +414,27 @@ inline Int Tree::islinked(Long_I treeInd1, Long_I treeInd2)
 	error("should not reach here!"); return 0;
 }
 
-// 'nodes[treeInd]' will produce 'board' in the next move
+// 'nodes[treeInd]' will produce 'config' in the next move
 // if board already exists, output tree index of the same board
 // return 0 if this is a new configuration
 // return -1 if situation exists but not a ko
 // return -2 if situation exists and is a ko
 // return -3 if this is a new situation of an existing configuration
-inline Int Tree::check_ko(Int_O &search_ret, Long_O &treeInd_match, Long_O &orderInd, Long_I treeInd, Config_I &config)
+inline Int Tree::check_ko(Int_O &search_ret, Long_O &treeInd_match, Long_O &orderInd,
+	Long_I treeInd, Config_I &config)
 {
 	Long poolInd;
 	search_ret = m_pool.search(poolInd, orderInd, config);
-	treeInd_match = m_pool.treeInd(poolInd, who(treeInd));
-	// board already exists
+	// config already exists
 	if (search_ret == 0) {
-		if (who(treeInd_match) == who(treeInd))
+		treeInd_match = m_pool.treeInd(poolInd, ::next(who(treeInd)));
+		if (treeInd_match < 0)
 			return -3;
 		if (islinked(treeInd_match, treeInd))
 			return -2; // Ko!
 		return -1; // no Ko
 	}
+	poolInd = -1;
 	return 0;
 }
 
@@ -633,7 +638,7 @@ inline Bool Tree::next_exist(Move mov, Long_I treeInd /*optional*/)
 // return 0 if successful and new node created
 // return 1 if linked to existing node and no Ko
 // return 2 if linked to existing node and has Ko
-// return -1 if there is all legal moves already exists
+// return -1 if there is all available moves already exists
 // return -2 if double pass caused end of game
 Int Tree::rand_move(Long_I treeInd /*optional*/)
 {
@@ -682,11 +687,20 @@ inline Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 
 	// no non-dumb placing left, consider passing
 	if (!next_exist(Move(Act::PASS), treeInd1)) {
-		if (pass(treeInd1)) return -2; // double pass
-		else return 0; // first pass
+		ret = pass(treeInd1);
+		if (ret == -1)
+			return -2; // double pass successful
+		else if (ret == 0)
+			return 0; // first pass
+		else if (ret == -2) {
+			return -1; // double pass not allowed
+		}
+		else
+			error("unhandled case!");
 	}
 
-	return -1; // all leagl moves already exist
+	// all leagl moves already exist
+	return -1;
 }
 
 inline Int Tree::rand_game(Long_I treeInd, Bool_I out)
@@ -767,10 +781,10 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 	}
 
 	// enumerate children
+	Int nskip = 35; // debug
 	for (i = 0; i < 1000; ++i) {
 		ret = rand_smart_move(treeInd1);
-		// debug
-		if (nnode() == 100) {
+		if (nnode() == 100) { // debug
 			writeSGF("test.sgf");
 		}
 		// end debug
@@ -795,6 +809,13 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 			if (ret == -1) {
 				continue; // downstream ko exists
 			}
+			else if (ret == 1) {
+				// double pass solved two nodes
+				return 0;
+			}
+			else if (ret != 0) {
+				error("unhandled case!");
+			}
 			child_sco2 = score2(child_treeInd);
 			child_sol = solution(child_treeInd);
 
@@ -803,7 +824,7 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 				best_child_sol(treeInd1) = child_sol;
 				if (best_child_sol(treeInd1) == Sol::GOOD) {
 					set_solution(Sol::BAD, treeInd1);
-					set_score2(comp_score2(best_child_sco2(treeInd1)), treeInd1);
+					set_score2(inv_score2(best_child_sco2(treeInd1)), treeInd1);
 					return 0; // debug break point
 				}
 			}
@@ -817,43 +838,34 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 		}
 		// all children exist
 		else if (ret == -1) {
+			if (node(34).nnext() == 0) {
+				// double pass was the only choice but not allowed...
+				set_solution(Sol::FORBIDDEN, treeInd1);
+				set_score2(inv_score2(best_child_sco2(treeInd1)), treeInd1);
+			}
 			all_child_exist(treeInd1) = true;
 			// all children solved
 			if (!found_ko) {
 				if (best_child_sol(treeInd1) == Sol::FAIR) {
 					set_solution(Sol::FAIR, treeInd1);
-					set_score2(comp_score2(best_child_sco2(treeInd1)), treeInd1);
+					set_score2(inv_score2(best_child_sco2(treeInd1)), treeInd1);
 				}
 				else { // best == Sol::BAD
 					set_solution(Sol::GOOD, treeInd1);
-					set_score2(comp_score2(best_child_sco2(treeInd1)), treeInd1);
+					set_score2(inv_score2(best_child_sco2(treeInd1)), treeInd1);
 				}
 				return 0; // debug break point
 			}
 			// not all children solved
 			else {
 				set_solution(Sol::KO_ONLY, treeInd1);
-				set_score2(comp_score2(best_child_sco2(treeInd1)), treeInd1);
+				set_score2(inv_score2(best_child_sco2(treeInd1)), treeInd1);
 				return -1; // debug break point
 			}
 		}
 		// new pass node created, double pass caused end of game
 		else if (ret == -2) {
-			// child is already solved by game result
-			// debug, display board
-			cout << "largest treeInd = " << nnode() - 1 << endl;
-			disp_board(nnode() - 1); cout << "\n\n" << endl;
-			// end debug
-			child_treeInd = nnode() - 1; // debug break point
-			if (best_child_sco2(treeInd1) < score2(child_treeInd)) {
-				best_child_sco2(treeInd1) = score2(child_treeInd);
-				best_child_sol(treeInd1) = solution(child_treeInd);
-				if (best_child_sol(treeInd1) == Sol::GOOD) {
-					set_solution(Sol::BAD, treeInd1);
-					set_score2(comp_score2(best_child_sco2(treeInd1)), treeInd1);
-					return 0; // debug break point
-				}
-			}
+			return 1;
 		}
 		else
 			error("unhandled return!");

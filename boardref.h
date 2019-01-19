@@ -1,5 +1,6 @@
 #pragma once
 #include "config.h"
+#include "board.h"
 
 // constant reference type to board
 // has all const functions of Board
@@ -61,9 +62,9 @@ public:
 	// X's territory = # X's stone on board + # single qi's surrounded by X + (other qi's not surrounded by Y)/2
 	Int calc_territory2(Who_I who) const
 	{
-		if (m_trans.flip)
+		if (m_trans.flip())
 			return m_config.calc_territory2(next(who));
-		return m_config.calc_territory2(next(who));
+		return m_config.calc_territory2(who);
 	}
 
 	// is (x,y) an eye surrounded by who
@@ -103,6 +104,7 @@ inline void BoardRef::disp() const
 	for (i = 0; i < board_Nx(); ++i) cout << Int(i) << "   "; cout << "\n";
 	cout << "    ";
 	for (x = 0; x < Nx; ++x) cout << "----"; cout << "\n";
+
 	for (y = 0; y < Ny; ++y) {
 		cout << " " << Int(y) << " |";
 		for (x = 0; x < Nx; ++x) {

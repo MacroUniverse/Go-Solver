@@ -33,14 +33,22 @@ public:
 	Bool ispass(Int_I forkInd = 0) const { return m_last_mov[forkInd].ispass(); }
 	Bool isedit(Int_I forkInd = 0) const { return m_last_mov[forkInd].isedit(); }
 	Bool isplace(Int_I forkInd = 0) const { return m_last_mov[forkInd].isplace(); }
-	Bool x(Int_I forkInd = 0) const { return m_last_mov[forkInd].x(); }
-	Bool y(Int_I forkInd = 0) const { return m_last_mov[forkInd].y(); }
+	Char x(Int_I forkInd = 0) const {
+		return m_last_mov[forkInd].x();
+	}
+	Char y(Int_I forkInd = 0) const
+	{
+		return m_last_mov[forkInd].y();
+	}
 	Move move(Int_I forkInd = 0) const // get the move that leads to this node
 	{
 		return m_last_mov[forkInd];
 	}
 	Int parent(Long_I treeInd) const; // search a parent by tree index
-	Long poolInd() const { return m_poolInd; }
+	Long poolInd() const
+	{
+		return m_poolInd;
+	}
 	const Trans & trans() const
 	{
 		return m_trans;
@@ -60,16 +68,17 @@ public:
 	}
 
 	void push_last(const Move &mov, Long_I treeInd) { m_last.push_back(treeInd); m_last_mov.push_back(mov); }
-	void push_next(Long_I treeInd) { m_next.push_back(treeInd); }
+	void push_next(Long_I treeInd)
+	{ m_next.push_back(treeInd); }
 
-	void place(Char_I x, Char_I y, Who_I who, Long_I treeInd, Long_I poolInd) // already has bound checking
+	void place(Char_I x, Char_I y, Who_I who, Long_I treeInd, Long_I poolInd, Trans_I trans) // already has bound checking
 	{
-		m_who = who; push_last(Move(x, y), treeInd); m_poolInd = poolInd;
+		m_who = who; push_last(Move(x, y), treeInd); m_poolInd = poolInd; m_trans = trans;
 	}
 
-	void pass(Who_I who, Long_I treeInd, Long_I poolInd)
+	void pass(Who_I who, Long_I treeInd, Long_I poolInd, Trans_I trans)
 	{
-		push_last(Move(Act::PASS), treeInd); m_poolInd = poolInd; m_who = who;
+		push_last(Move(Act::PASS), treeInd); m_poolInd = poolInd; m_who = who; m_trans = trans;
 	}
 
 	~Node() {}

@@ -1,5 +1,10 @@
 #pragma once
 #include "config.h"
+#include "boardref.h"
+
+class Board;
+typedef const Board Board_I;
+typedef Board Board_O, Board_IO;
 
 // config with transformation information
 class Board
@@ -67,7 +72,7 @@ public:
 	// X's territory = # X's stone on board + # single qi's surrounded by X + (other qi's not surrounded by Y)/2
 	Int calc_territory2(Who_I who) const
 	{
-		if (m_trans.flip)
+		if (m_trans.flip())
 			return m_config.calc_territory2(next(who));
 		return m_config.calc_territory2(next(who));
 	}
@@ -144,11 +149,9 @@ public:
 		Trans trans = m_config.calc_trans();
 		m_config.transform(trans);
 		m_trans -= trans;
+		return 0;
 	}
 };
-
-typedef Board Board_O, Board_IO;
-typedef const Board Board_I;
 
 inline void Board::disp() const
 {

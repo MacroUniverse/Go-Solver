@@ -43,12 +43,12 @@ public:
 	// if (x,y) already have a stone, "who" argument is not used
 	// "mark" will mark connected stones and their qi.
 	// "group" has the coordinates of the connected stones
-	void connect(MatChar_O & mark, Int_O qi, vector<Move> /*_O*/ &group,
+	void connect(MatChar_O & mark, Int_O &qi, vector<Move> /*_O*/ &group,
 		Char_I x, Char_I y, Who_I who = Who::DEFAULT) const;
 
 	// internal recursive function called by connect()
 	void connect0(MatChar_IO & mark, Int_IO &qi, vector<Move> /*_IO*/ &group,
-		Char_I x, Char_I y) const;
+		Char_I x, Char_I y, Who_I who = Who::DEFAULT) const;
 
 	// get all qi's connected to one qi
 	void connect_qi(MatChar_O & mark, vector<Move> /*_O*/ &group, Char_I x, Char_I y) const;
@@ -96,6 +96,9 @@ public:
 
 	// move internal data from one config to another without copying
 	void operator<<(Config_IO &rhs);
+
+	// rotate a board itself
+	void rotate(Int_I rot);
 
 	// transform a board itself
 	void transform(Trans_I trans);
@@ -164,31 +167,27 @@ inline Trans Config::calc_trans() const
 	// square board (4 rotations)
 	if (Nx == Ny) {
 		trans.resize(8); val.resize(8);
+		trans[0].set_flip(false); trans[0].set_rot(0);
+		trans[1].set_flip(false); trans[1].set_rot(1);
+		trans[2].set_flip(false); trans[2].set_rot(2);
+		trans[3].set_flip(false); trans[3].set_rot(3);
+		trans[4].set_flip(true);  trans[4].set_rot(0);
+		trans[5].set_flip(true);  trans[5].set_rot(1);
+		trans[6].set_flip(true);  trans[6].set_rot(2);
+		trans[7].set_flip(true);  trans[7].set_rot(3);
 	}
+	// rectangle board (2 rotations)
 	else {
 		trans.resize(4); val.resize(4);
+		trans[0].set_flip(false); trans[0].set_rot(0);
+		trans[1].set_flip(false); trans[1].set_rot(2);
+		trans[2].set_flip(true);  trans[2].set_rot(0);
+		trans[3].set_flip(true);  trans[3].set_rot(2);
 	}
 
 	// check board coordinates in row-major order
 	for (y = 0; y < Ny; ++y) {
 		for (x = 0; x < Nx; ++x) {
-			if (Nx == Ny) {
-				trans[0].set_flip(false); trans[0].set_rot(0);
-				trans[1].set_flip(false); trans[1].set_rot(1);
-				trans[2].set_flip(false); trans[2].set_rot(2);
-				trans[3].set_flip(false); trans[3].set_rot(3);
-				trans[4].set_flip(true);  trans[4].set_rot(0);
-				trans[5].set_flip(true);  trans[5].set_rot(1);
-				trans[6].set_flip(true);  trans[6].set_rot(2);
-				trans[7].set_flip(true);  trans[7].set_rot(3);
-			}
-			else {
-				trans[0].set_flip(false); trans[0].set_rot(0);
-				trans[1].set_flip(false); trans[1].set_rot(2);
-				trans[2].set_flip(true);  trans[2].set_rot(0);
-				trans[3].set_flip(true);  trans[3].set_rot(2);
-			}
-
 			// evaluate (x, y) position for all transformations left
 			best = 0;
 			for (i = 0; i < val.size(); ++i) {
@@ -202,6 +201,7 @@ inline Trans Config::calc_trans() const
 				if (val[i] < best) {
 					trans.erase(trans.begin() + i);
 					val.erase(val.begin() + i);
+					--i;
 				}
 			}
 
@@ -218,25 +218,25 @@ inline Trans Config::calc_trans() const
 
 inline Who Config::transform1(Char_I x, Char_I y, Trans_I trans) const
 {
-	Char x1, y1;
+	Char x1, y1, xmax = board_Nx() - 1, ymax = board_Ny() - 1;
 	Who stone;
-	if (trans.rot == 0) {
+	if (trans.rot() == 0) {
 		x1 = x; y1 = y;
 	}
-	else if (trans.rot == 1) {
-		x1 = -y; y1 = x;
+	else if (trans.rot() == 1) {
+		x1 = ymax - y; y1 = x;
 	}
-	else if (trans.rot == 2) {
-		x1 = -x; y1 = -y;
+	else if (trans.rot() == 2) {
+		x1 = xmax - x; y1 = ymax - y;
 	}
-	else if (trans.rot == 3) {
-		x1 = y; y1 = -x;
+	else if (trans.rot() == 3) {
+		x1 = y; y1 = xmax - x;
 	}
 	else
 		error("illegal rotation!");
 
 	stone = m_data(x1, y1);
-	if (trans.flip) {
+	if (trans.flip()) {
 		if (stone == Who::WHITE)
 			return Who::BLACK;
 		if (stone == Who::BLACK)
@@ -246,49 +246,25 @@ inline Who Config::transform1(Char_I x, Char_I y, Trans_I trans) const
 	return stone;
 }
 
-void Config::transform(Config_O &board, Trans_I trans) const
+void Config::transform(Config_O &config, Trans_I trans) const
 {
 	Char Nx = board_Nx(), Ny = board_Ny(), x, y;
-	board.init();
+	config.init();
 	for (y = 0; y < Ny; ++y) {
 		for (x = 0; x < Nx; ++x) {
-			board(x, y) = transform1(x, y, trans);
+			config(x, y) = transform1(x, y, trans);
 		}
 	}
 }
 
+// TODO this might be a slow implementation
 void Config::transform(Trans_I trans)
 {
 	Char x1, y1, x, y, Nx = board_Nx(), Ny = board_Ny();
-	Who temp;
-
-	for (y = 0; y < Ny; ++y) {
-		for (x = 0; x < Nx; ++x) {
-			if (trans.rot() == 0) {
-				x1 = x; y1 = y;
-			}
-			else if (trans.rot() == 1) {
-				x1 = -y; y1 = x;
-			}
-			else if (trans.rot() == 2) {
-				x1 = -x; y1 = -y;
-			}
-			else if (trans.rot() == 3) {
-				x1 = y; y1 = -x;
-			}
-			else
-				error("illegal rotation!");
-
-			if (trans.flip) {
-				temp = m_data(x1, y1);
-				m_data(x1, y1) = next(m_data(x, y));
-				m_data(x, y) = next(temp);
-			}
-			else {
-				SWAP(m_data(x1, y1), m_data(x, y));
-			}
-		}
-	}
+	Who who1;
+	Config config;
+	transform(config, trans);
+	*this << config;
 }
 
 inline Int Config::check(Char_I x, Char_I y, Who_I who) const
@@ -300,7 +276,7 @@ inline Int Config::check(Char_I x, Char_I y, Who_I who) const
 	Int Nx = board_Nx(), Ny = board_Ny(), Nremove = 0;
 
 	// output of connect()
-	MatChar mark(Nx, Ny); vector<Move> group; Int qi;
+	MatChar mark(Nx, Ny, Char(0)); vector<Move> group; Int qi;
 
 	// check if already occupied
 	if (m_data(x, y) != Who::NONE)
@@ -358,7 +334,7 @@ inline Int Config::place(Char_I x, Char_I y, Who_I who)
 	Bool removed = false;
 
 	// output of connect()
-	MatChar mark; vector<Move> group; Int qi = 0;
+	MatChar mark(board_Nx(), board_Ny(), Char(0)); vector<Move> group; Int qi = 0;
 
 	// check if already occupied
 	if (m_data(x, y) != Who::NONE)
@@ -411,25 +387,29 @@ void Config::operator<<(Config_IO &rhs)
 	m_data << rhs.m_data;
 }
 
-inline void Config::connect(MatChar_O & mark, Int_O qi, vector<Move> /*_O*/ &group,
-	Char_I x, Char_I y, Who_I who) const
+inline void Config::connect(MatChar_O &mark, Int_O &qi, vector<Move> /*_O*/ &group,
+	Char_I x, Char_I y, Who_I who_assume /*optional*/) const
 {
 	// init output
 	mark.resize(board_Nx(), board_Ny()); mark = 0; group.resize(0); qi = 0;
 	// connect (x,y) recursively
-	connect0(mark, qi, group, x, y);
+	connect0(mark, qi, group, x, y, who_assume);
 }
 
 inline void Config::connect0(MatChar_IO &mark, Int_IO &qi, vector<Move> /*_IO*/ &group,
-	Char_I x, Char_I y) const
+	Char_I x, Char_I y, Who_I who_assume) const
 {
 	Char Nx = board_Nx(), Ny = board_Ny();
 	Who who, who0;
 	if (m_data(x, y) == Who::NONE) {
-		error("cannot be empty!"); // debug
+		if (who_assume == Who::DEFAULT)
+			error("must specify who_assume argument!");
+		else
+			who0 = who_assume;
 	}
 	else
 		who0 = m_data(x, y);
+
 	group.push_back(Move(x, y));
 	mark(x, y) = 1;
 
@@ -477,7 +457,7 @@ inline void Config::connect0(MatChar_IO &mark, Int_IO &qi, vector<Move> /*_IO*/ 
 void Config::connect_qi(MatChar_O & mark, vector<Move> /*_O*/ &group, Char_I x, Char_I y) const
 {
 	// init output
-	mark = 0; group.resize(0);
+	mark.resize(board_Nx(), board_Ny()); mark = Char(0); group.resize(0);
 	// connect (x,y) recursively
 	connect_qi0(mark, group, x, y);
 }
@@ -532,9 +512,8 @@ Bool Config::is_game_end() const
 {
 	Char Nx = board_Nx(), Ny = board_Ny(), x, y;
 	Int qi, i;
-	MatChar tot_mark(Nx, Ny), mark;
+	MatChar tot_mark(Nx, Ny, Char(0)), mark;
 	vector<Move> group;
-	tot_mark = 0;
 
 	// scan all qi's on the board
 	for (y = 0; y < Ny; ++y) {
@@ -555,10 +534,13 @@ Bool Config::is_game_end() const
 					return false;
 			}
 			else if (qi == 2) {
+				if (is_dumb_2eye_filling(x, y, Who::BLACK) || is_dumb_2eye_filling(x, y, Who::WHITE))
+					return false;
 				error("check mutual life here! not implemened!");
 			}
 		}
 	}
+	return true;
 }
 
 inline Int Config::calc_territory2(Who_I who) const

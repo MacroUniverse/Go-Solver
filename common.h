@@ -43,11 +43,11 @@ inline Int who2int(Who_I who)
 }
 
 // inverse color
-inline Who next(Who_I s)
+inline Who next(Who_I who)
 {
-	if (s == Who::BLACK) return Who::WHITE;
-	if (s == Who::WHITE) return Who::BLACK;
-	if (s == Who::NONE) return Who::BLACK; // empty board
+	if (who == Who::BLACK) return Who::WHITE;
+	if (who == Who::WHITE) return Who::BLACK;
+	if (who == Who::NONE) return Who::BLACK; // empty board
 	error("opposite(Who_I): unknown error!");
 }
 
@@ -99,7 +99,7 @@ inline Int inv_territory2(Int_I territory2)
 }
 
 // complementary score (opponent's territory)
-inline Int comp_score2(Int_I score2)
+inline Int inv_score2(Int_I score2)
 {
 	return inv_territory2(score2);
 }
@@ -143,36 +143,66 @@ inline Trans inv(Trans_I trans)
 }
 
 // transform coordinates
+inline void transf(Char_IO &x, Char_IO &y, Int_I rot)
+{
+	Char temp, xmax = board_Nx() - 1, ymax = board_Ny() - 1;
+	if (rot == 1) {
+		temp = x; x = y; y = xmax - temp;
+	}
+	else if (rot == 2) {
+		x = xmax - x; y = ymax-y;
+	}
+	else if (rot == 3) {
+		temp = x; x = ymax - y; y = temp;
+	}
+}
+
+// transform coordinates and who
 inline void transf(Char_IO &x, Char_IO &y, Who_O &who, Trans trans)
 {
-	Char temp;
+	Char temp, xmax = board_Nx() - 1, ymax = board_Ny() - 1;
 	if (trans.rot() == 1) {
-		temp = x; x = y; y = -temp;
+		temp = x; x = y; y = xmax-temp;
 	}
 	else if (trans.rot() == 2) {
-		x = -x; y = -y;
+		x = xmax-x; y = ymax-y;
 	}
 	else if (trans.rot() == 3) {
-		temp = x; x = -y; y = temp;
+		temp = x; x = ymax-y; y = temp;
 	}
-	if (trans.flip)
+	if (trans.flip())
 		who = next(who);
 }
 
 // inverse transform coordinates
+inline void inv_transf(Char_IO &x, Char_IO &y, Int_I rot)
+{
+	Char temp, xmax = board_Nx() - 1, ymax = board_Ny() - 1;
+	if (rot == 1) {
+		temp = x; x = ymax-y; y = temp;
+	}
+	else if (rot == 2) {
+		x = xmax-x; y = ymax-y;
+	}
+	else if (rot == 3) {
+		temp = x; x = y; y = xmax-temp;
+	}
+}
+
+// inverse transform coordinates and who
 inline void inv_transf(Char_IO &x, Char_IO &y, Who_O &who, Trans trans)
 {
-	Char temp;
+	Char temp, xmax = board_Nx() - 1, ymax = board_Ny() - 1;
 	if (trans.rot() == 1) {
-		temp = x; x = -y; y = temp;
+		temp = x; x = ymax-y; y = temp;
 	}
 	else if (trans.rot() == 2) {
-		x = -x; y = -y;
+		x = xmax-x; y = ymax-y;
 	}
 	else if (trans.rot() == 3) {
-		temp = x; x = y; y = -temp;
+		temp = x; x = y; y = xmax-temp;
 	}
-	if (trans.flip)
+	if (trans.flip())
 		who = next(who);
 }
 
@@ -188,7 +218,7 @@ inline void operator+=(Trans_IO &trans1, Trans_I trans2)
 // calculate trans1 -= trans2
 inline void operator-=(Trans_IO &trans1, Trans_I trans2)
 {
-	trans1.set_rot((trans1.rot() - trans2.rot())%4);
+	trans1.set_rot(mod(trans1.rot() - trans2.rot(), 4));
 	if (trans2.flip())
 		trans1.set_flip(!trans1.flip());
 }
