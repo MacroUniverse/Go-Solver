@@ -26,6 +26,8 @@ Here is some rules for randomly evaluating children of a node. When another go p
 * A Dumb big eye filling is placing a stone in a player's own big eye. At the end of the game, there will be no big eye left because the opponent will eventually try to destroy it.
 * Only try passing when there is no other options.
 
+* If double passing is not allowed, it is considered a ko.
+
 ## Equivalent Board Configurations
 * A board configuration specifies the positions of two kinds of stones on the board.
 * Rotating the board does not change the configuration (square board can rotate 3 times and rectangle board 1 time).
@@ -74,7 +76,12 @@ Important data members:
 ## Ko Complication
 If neither ko (打劫) nor upward fork is considered, the above algorithm for solving a node can be implemented easily with a recursive function `Sol Tree::solve(treeInd)`, which tries to solve a node's children one by one, by calling `solve()` itself. The end node is automatically solved when it is born (by `Tree::pass()`).
 
+TODO: The following needs to be rewritten, assume ko child is 0 score, set solution to KO_ONLY, etc....
+```
 However, when a ko (or super ko, the same situation exists in an ancestor) is found and current node linked to an upstream node called ko node (linking will update the `m_next` member of the current node, but will not update `m_last` of the ko node), `solve()` will recur infinitely. To prevent this, after a ko is linked, `solve()` will push the link destination using `Tree::m_ko_treeInds.push_back()`, and keep solving other children. If a `GOOD` child is found, then the ko link will be discarded and the current solution will be `BAD`. If not, after all children are searched, `solve()` updates `Tree::m_ko_best` using the best solved child, and sets the solution to `KO_ONLY` then return failure. When the calling `solve()` sees that failure, it will search the elements `Tree::m_ko_treeInds[]` to see if any leads to the current node and remove the matching elements. If `Tree::m_ko_treeInds` becomes empty, the solution is the opposite of `Tree::m_ko_best`. If it's not empty, `solve()` will keep solving other children. If a `GOOD` child is found, the current solution will be `BAD`. If another ko is linked, push to `Tree::m_ko_treeInds` and keep solving other children, after all children are searched, `solve()` updates `Tree::m_ko_best`, and sets the solution to `KO_ONLY` then return failure.
+```
+
+
 
 ## GNU go
 GNU go can play 5x5 to 19x19 boards. So it might be used to guess the best child for these boards. Another advantage is it might be written in c.

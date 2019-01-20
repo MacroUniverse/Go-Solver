@@ -9,8 +9,7 @@ namespace slisc {
 // return -1: if s is not found and s < v[0]
 // return 1: if s is not found and v[end] < s
 // return -2: if s is not found and v[0] < s < v[end], output ind so that v[ind] < s < v[ind+1]
-// return -3: if v.size() < 1
-
+// return -3: if s is not found because v.size() == 0
 template <class T, class T1>
 Int lookupInt(Long_O &ind, const T1 &v, const T &s)
 {

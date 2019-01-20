@@ -14,17 +14,12 @@ private:
 	vector<Move> m_last_mov; // moves of m_last that leads to this node
 	Long m_poolInd; // pool index, board stored in Pool::m_board[m_pool_ind]
 	Trans m_trans; // transformations needed for the config
-
-public:
-
 	// solution related
 	Sol m_sol; // Sol::GOOD/Sol::BAD/Sol::FAIR
 	Int m_score2; // an over-estimation of final score (two gods playing), -1 means unclear
-	Sol m_best_child_sol; // solution of the best child that are already solved
-	Int m_best_child_sco2; // score of the best child that are already solved
-	Bool m_all_child_exist; // all legal children exist in the tree
 
-	Node() : m_sol(Sol::UNKNOWN), m_best_child_sol(Sol::BAD), m_best_child_sco2(-1), m_all_child_exist(false), m_score2(-1) {}
+public:
+	Node() : m_sol(Sol::UNKNOWN), m_score2(-1) {}
 
 	// properties
 	// const Move & move() const { return *this; }
@@ -40,7 +35,7 @@ public:
 	{
 		return m_last_mov[forkInd].y();
 	}
-	Move move(Int_I forkInd = 0) const // get the move that leads to this node
+	const Move & move(Int_I forkInd = 0) const // get the move that leads to this node
 	{
 		return m_last_mov[forkInd];
 	}
@@ -54,7 +49,22 @@ public:
 		return m_trans;
 	}
 	Int nlast() const { return m_last.size(); }
-	Long last(Int_I ind) const { return m_last[ind]; }
+
+	Bool is_last_ko_link(Int_I ind) const
+	{
+		if (m_last[ind] < 0)
+			return true;
+		return false;
+	}
+
+	Long last(Int_I ind) const
+	{
+		Long ret = m_last[ind];
+		if (ret < 0)
+			return -ret - 1;
+		else
+			return ret;
+	}
 	Int nnext() const { return m_next.size(); }
 	inline Long next(Int_I ind) const; // tree index for a child
 	inline Bool isend() const; // is this a bottom node (end of game)?
@@ -67,18 +77,33 @@ public:
 		m_who = Who::NONE; m_poolInd = 0;
 	}
 
+	Int score2() const
+	{
+		return m_score2;
+	}
+
+	void set_sco2(Int_I score2)
+	{
+		m_score2 = score2;
+	}
+
+	Sol solution() const
+	{
+		return m_sol;
+	}
+
+	void set_solution(Sol_I sol)
+	{
+		m_sol = sol;
+	}
+
 	void push_last(const Move &mov, Long_I treeInd) { m_last.push_back(treeInd); m_last_mov.push_back(mov); }
 	void push_next(Long_I treeInd)
 	{ m_next.push_back(treeInd); }
 
-	void place(Char_I x, Char_I y, Who_I who, Long_I treeInd, Long_I poolInd, Trans_I trans) // already has bound checking
+	void set(Who_I who, Long_I poolInd, Trans_I trans)
 	{
-		m_who = who; push_last(Move(x, y), treeInd); m_poolInd = poolInd; m_trans = trans;
-	}
-
-	void pass(Who_I who, Long_I treeInd, Long_I poolInd, Trans_I trans)
-	{
-		push_last(Move(Act::PASS), treeInd); m_poolInd = poolInd; m_who = who; m_trans = trans;
+		m_who = who; m_poolInd = poolInd; m_trans = trans;
 	}
 
 	~Node() {}
@@ -88,7 +113,9 @@ public:
 Int Node::parent(Long_I treeInd) const
 {
 	Long forkInd;
-	lookupInt(forkInd, m_last, treeInd);
+	todo: error here, m_last[i] might be negative! try to solve this!
+	if (lookupInt(forkInd, m_last, treeInd))
+		error("parent does not exist!");
 	return forkInd;
 }
 
@@ -104,7 +131,7 @@ Long Node::next(Int_I ind) const
 	if (treeInd > 0)
 		return treeInd;
 	else if (treeInd < -1)
-		return -treeInd - 1;
+		return -treeInd - 1; // ko link
 	else
 		error("unkown!");
 }

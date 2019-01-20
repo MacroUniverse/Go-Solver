@@ -1,6 +1,10 @@
 #pragma once
 #include "common.h"
 
+class Move;
+typedef const Move Move_I;
+typedef Move Move_O, Move_IO;
+
 // specify a move
 class Move
 {
@@ -36,9 +40,6 @@ public:
 	Char x() const; // x coordinate of PLACE
 
 	Char y() const; // y coordinate of PLACE
-
-	// if two moves are the same
-	Bool operator==(const Move &rhs) const;
 
 	// === none-const functions ===
 	
@@ -102,7 +103,8 @@ inline Bool Move::isinit() const
 inline Char Move::x() const
 {
 #ifdef GOS_CHECK_BOUND
-	if (m_x < 0) error("Move::x(): not a coord!");
+	if (m_x < 0)
+		error("Move::x(): not a coord!");
 #endif
 	return m_x;
 }
@@ -115,14 +117,6 @@ inline Char Move::y() const
 	return m_y;
 }
 
-Bool Move::operator==(const Move &rhs) const
-{
-	if (m_x < 0)
-		return m_x == rhs.m_x;
-	else
-		return m_x == rhs.m_x && m_y == rhs.m_y;
-}
-
 inline void Move::place(Char_I x, Char_I y)
 {
 #ifdef GOS_CHECK_BOUND
@@ -130,4 +124,15 @@ inline void Move::place(Char_I x, Char_I y)
 		error("Move::Move(x, y): coord < 0 !");
 #endif
 	m_x = x; m_y = y;
+}
+
+Bool operator==(Move_I &mov1, Move_I &mov2)
+{
+	if (mov1.type() == mov2.type()) {
+		if (mov1.isplace()) {
+			return mov1.x() == mov2.x() && mov1.y() == mov2.y();
+		}
+		return true;
+	}
+	return false;
 }

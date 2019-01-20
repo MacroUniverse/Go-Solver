@@ -30,6 +30,29 @@ typedef const Act Act_I;
 enum class Sol : Char { BAD, FAIR, GOOD, UNKNOWN, KO_ONLY };
 typedef const Sol Sol_I;
 
+// convert sol to integer
+inline Int sol2int(Sol_I sol)
+{
+	if (sol == Sol::BAD)
+		return 0;
+	if (sol == Sol::FAIR)
+		return 1;
+	if (sol == Sol::GOOD)
+		return 2;
+	if (sol == Sol::UNKNOWN) {
+		return -1; error("is this even useful?");
+	}
+	if (sol == Sol::KO_ONLY) {
+		return -2; error("is this even useful?");
+	}
+	error("illegal sol!");
+}
+
+inline Int operator-(Sol_I sol1, Sol_I sol2)
+{
+	return sol2int(sol1) - sol2int(sol2);
+}
+
 // convert who to integer
 inline Int who2int(Who_I who)
 {
