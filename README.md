@@ -104,3 +104,4 @@ Other projects such as mini-go probably requires some training.
 
 ## TODO
 * all "++m_treeInd" might be wrong! some should be m_treeInd =  nnode() - 1
+* a same situation in the upstream is not always a super ko! the color could be flipped for example! think about it...

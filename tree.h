@@ -672,6 +672,8 @@ inline void Tree::writeSGF01(ofstream &fout, Long_I treeInd1, const string &pref
 	// add green (black wins) or blue (white wins) mark
 	if (solution(treeInd1) == Sol::KO_ONLY)
 		fout << "DO[]"; // brown
+	else if (solution(treeInd1) == Sol::FORBIDDEN)
+		fout << "BM[1]"; // red
 	else if (winner(treeInd1) == Who::BLACK)
 		fout << "TE[1]"; // green
 	else if (winner(treeInd1) == Who::WHITE)
@@ -847,7 +849,7 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 	}
 
 	// enumerate children
-	Int nskip = 42; // debug
+	Int nskip = 102; // debug
 	Bool save = false;
 	for (i = 0; i < 1000; ++i) {
 
