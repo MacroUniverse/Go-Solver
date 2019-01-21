@@ -35,11 +35,14 @@ public:
 	{
 		return m_last_mov[forkInd].y();
 	}
-	const Move & move(Int_I forkInd = 0) const // get the move that leads to this node
+	// get the move that leads to this node
+	const Move & move(Int_I forkInd = 0) const
 	{
 		return m_last_mov[forkInd];
 	}
-	Int parent(Long_I treeInd) const; // search a parent by tree index
+	// search a parent by tree index
+	// there might be multiple links to a single parent!
+	void parent(vector<Int> &forkInd, Long_I treeInd) const;
 	Long poolInd() const
 	{
 		return m_poolInd;
@@ -109,15 +112,16 @@ public:
 	~Node() {}
 };
 
-// assuming the parents are in order
-Int Node::parent(Long_I treeInd) const
+void Node::parent(vector<Int> &forkInd, Long_I treeInd) const
 {
-	Int i;
-	for (i = nlast() - 1; i >= 0; ++i) {
+	Int i, Nlast = nlast();
+	forkInd.resize(0);
+	for (i = 0; i < Nlast; ++i) {
 		if (last(i) == treeInd)
-			return i;
+			forkInd.push_back(i);
 	}
-	error("parent not found!");
+	if (forkInd.size() == 0)
+		error("parent not found!");
 }
 
 // ind = -1 : last element, ind = -2 : second last element, etc.

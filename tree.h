@@ -68,11 +68,28 @@ public:
 		return m_nodes[next(treeInd, forkInd)];
 	} // forkInd can be negative
 
-	const Move & nextMove(Long_I treeInd = -1, Int_I forkInd = 0) const // return next move of a node
+	// return next move of a node
+	Move nextMove(Long_I treeInd = -1, Int_I forkInd = 0) const
 	{
-		const Node & next_node = nextNode(treeInd, forkInd);
-		Int ind = next_node.parent(treeInd);
-		return next_node.move(ind);
+		Int i, j, count = 0;
+		const Long treeInd1 = def(treeInd);
+		const Long next_treeInd = next(treeInd1, forkInd);
+		const Node & next_node = node(next_treeInd);
+		vector<Int> forkInds;
+		next_node.parent(forkInds, treeInd1);
+		if (forkInds.size() == 1) {
+			return next_node.move(forkInds[0]);
+		}
+		else {
+			// multiple links between two nodes
+			// count number of repeated links
+			// doesn't matter which is which, as long as they are one to one linked
+			for (j = 0; j < forkInd; ++j) {
+				if (next(treeInd1, j) == next_treeInd)
+					++count;
+			}
+			return next_node.move(forkInds[count]);
+		}
 	}
 
 	Who who(Long_I treeInd = -1) const // who played the node
@@ -129,6 +146,8 @@ public:
 	inline Long writeSGF0(ofstream &fout, Long_I treeInd = -1); // internal function called by writeSGF();
 
 	inline void writeSGF01(ofstream &fout, Long_I treeInd, const string &prefix = ""); // internal function called by writeSGF0();
+
+	inline void writeSGF0_link(ofstream &fout, Long_I treeInd_from, Int_I forkInd, const string &prefix);
 
 	inline Bool next_exist(Move mov, Long_I treeInd = -1); // does next node have this mov already?
 
@@ -316,8 +335,6 @@ inline Int Tree::pass(Long_I treeInd /*optional*/)
 	for (i = 0; i < node.nlast(); ++i) {
 		if (node.move(i).ispass()) {
 			// double passed!
-			if (node.nlast() > 1)
-				error("unhandled case!");
 			if (!board.is_game_end()) {
 				// game not ended, build a ko link
 				ko_treeInd = last(treeInd1, i);
@@ -459,8 +476,8 @@ inline Int Tree::islinked(Long_I treeInd1, Long_I treeInd2)
 {
 	Long i, treeInd = treeInd2;
 	for (i = 0; i < 10000; ++i) {
-		if (m_nodes[treeInd].nlast() > 1) break; // multiple upward fork
 		if (treeInd == treeInd1) return 1; // found treeInd2
+		if (m_nodes[treeInd].nlast() > 1) break; // multiple upward fork
 		if (treeInd == 0) return 0; // reached top of tree
 		treeInd = m_nodes[treeInd].last(0); // single line, go up
 	}
@@ -601,11 +618,11 @@ inline Long Tree::writeSGF0(ofstream &fout, Long_I treeInd)
 			}
 			treeInd2 = next(treeInd1);
 			if (is_next_ko(treeInd1)) {
-				writeSGF01(fout, treeInd2, "ko>");
+				writeSGF0_link(fout, treeInd1, 0, "ko>");
 				return max_treeInd; // ko link
 			}
 			if (treeInd2 < treeInd1) { // reached a link to an existing node
-				writeSGF01(fout, treeInd2, ">"); // write a node to represent a link
+				writeSGF0_link(fout, treeInd1, 0, ">"); // write a node to represent a link
 				return max_treeInd;
 			}
 			if (treeInd2 != treeInd1 + 1)
@@ -628,10 +645,10 @@ inline Long Tree::writeSGF0(ofstream &fout, Long_I treeInd)
 			error("unkown error"); // game ends or ko link!
 		treeInd2 = next(treeInd1, i);
 		if (is_next_ko(treeInd1, i)) {
-			writeSGF01(fout, treeInd2, "ko>"); // write a node to represent a link
+			writeSGF0_link(fout, treeInd1, i, "ko>"); // write a node to represent a link
 		}
-		else if (treeInd2 < max_treeInd) { // reached a link to an existing node
-			writeSGF01(fout, treeInd2, ">"); // write a node to represent a link
+		else if (treeInd2 <= max_treeInd) { // reached a link to an existing node
+			writeSGF0_link(fout, treeInd1, i, ">"); // write a node to represent a link
 		}
 		else if (treeInd2 == max_treeInd + 1)
 			writeSGF0(fout, treeInd2); // normal node
@@ -688,9 +705,61 @@ inline void Tree::writeSGF01(ofstream &fout, Long_I treeInd1, const string &pref
 	fout << "\n";
 }
 
+inline void Tree::writeSGF0_link(ofstream &fout, Long_I treeInd_from, Int_I forkInd, const string &prefix)
+{
+	Char BW; // letter B or letter W
+	Node & node_from = m_nodes[treeInd_from];
+	Int i, nnext;
+	Who who = ::next(node_from.who());
+	Long treeInd_to = next(treeInd_from, forkInd);
+	if (who == Who::BLACK)
+		BW = 'B';
+	else if (who == Who::WHITE)
+		BW = 'W';
+	else
+		error("illegal stone color");
+
+	Move mov = nextMove(treeInd_from, forkInd);
+
+	fout << ";" << BW;
+	if (mov.ispass()) // pass
+		fout << "[]";
+	else
+		fout << '[' << char('a' + mov.x()) << char('a' + mov.y()) << "]";
+
+	// add node number to title
+	fout << "N[" << prefix << "[" << treeInd_to << "\\]";
+	// add score
+	if (solved(treeInd_to))
+		fout << 0.5*score2(treeInd_to);
+	// end title
+	fout << "]";
+
+	// add green (black wins) or blue (white wins) mark
+	Sol sol = solution(treeInd_to);
+	Who winner = sol2winner(who, sol);
+	if (sol == Sol::KO_ONLY)
+		fout << "DO[]"; // brown
+	else if (sol == Sol::FORBIDDEN)
+		fout << "BM[1]"; // red
+	else if (winner == Who::BLACK)
+		fout << "TE[1]"; // green
+	else if (winner == Who::WHITE)
+		fout << "IT[]"; // blue
+	else if (winner == Who::DRAW)
+		error("TODO...");
+	else if (winner == Who::NONE)
+		; // unsolved node
+	else
+		error("???");
+
+	fout << "\n";
+}
+
 inline Bool Tree::next_exist(Move mov, Long_I treeInd /*optional*/)
 {
-	Int i;
+	Int i, j;
+	vector<Move> moves;
 	Long treeInd1 = def(treeInd);
 	Node &node = m_nodes[treeInd1];
 	for (i = node.nnext() - 1; i >= 0; --i) {
@@ -843,13 +912,16 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 	// if already solved
 	if (solution(treeInd1) != Sol::UNKNOWN) {
 		if (solution(treeInd1) == Sol::KO_ONLY) {
-			error("unhandled situation!");
+			return -1;
+		}
+		else if (solution(treeInd1) == Sol::FORBIDDEN) {
+			return 3;
 		}
 		return 0;
 	}
 
 	// enumerate children
-	Int nskip = 102; // debug
+	Bool debug_stop = treeInd1 == 670 || nnode() >= 670; // debug
 	Bool save = false;
 	for (i = 0; i < 1000; ++i) {
 
@@ -888,6 +960,10 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 
 			if (solve_ret == -1) {
 				// is a ko node
+				child_sco2 = score2(child_treeInd);
+				if (best_ko_child_sco2 < child_sco2) {
+					best_ko_child_sco2 = child_sco2;
+				}
 				has_ko_child = true;
 				continue;
 			}
@@ -905,7 +981,7 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 					// solve() successful! (solve_ret == 0)
 					child_sol = solution(child_treeInd);
 					// check if there is a color flip
-					
+
 				}
 				else { // (solve_ret == 2)
 					// a ko node with all ko links resolved
@@ -1005,27 +1081,7 @@ Who Tree::winner(Long treeInd) const
 	Long treeInd1 = def(treeInd);
 	Sol sol = solution(treeInd1);
 	Who player = who(treeInd1);
-
-	if (sol == Sol::UNKNOWN)
-		return Who::NONE;
-	if (player == Who::BLACK) {
-		if (sol == Sol::GOOD)
-			return Who::BLACK;
-		if (sol == Sol::BAD)
-			return Who::WHITE;
-		if (sol == Sol::FAIR)
-			return Who::DRAW;
-	}
-	else if (player == Who::WHITE) {
-		if (sol == Sol::GOOD)
-			return Who::WHITE;
-		if (sol == Sol::BAD)
-			return Who::BLACK;
-		if (sol == Sol::FAIR)
-			return Who::DRAW;
-	}
-	else
-		error("illegal Who input");
+	return sol2winner(player, sol);
 }
 
 void Tree::calc_sol(Long_I treeInd)

@@ -263,3 +263,27 @@ inline Sol sco22sol(Int_I score2, Who_I who)
 	else
 		return Sol::FAIR;
 }
+
+Who sol2winner(Who player, Sol sol)
+{
+	if (sol == Sol::UNKNOWN)
+		return Who::NONE;
+	if (player == Who::BLACK) {
+		if (sol == Sol::GOOD)
+			return Who::BLACK;
+		if (sol == Sol::BAD)
+			return Who::WHITE;
+		if (sol == Sol::FAIR)
+			return Who::DRAW;
+	}
+	else if (player == Who::WHITE) {
+		if (sol == Sol::GOOD)
+			return Who::WHITE;
+		if (sol == Sol::BAD)
+			return Who::BLACK;
+		if (sol == Sol::FAIR)
+			return Who::DRAW;
+	}
+	else
+		error("illegal Who input");
+}
