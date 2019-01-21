@@ -27,7 +27,7 @@ typedef Who Who_IO, Who_O;
 enum class Act : Char { PLACE, PASS, EDIT, INIT }; // TODO: make this a char type
 typedef const Act Act_I;
 
-enum class Sol : Char { BAD, FAIR, GOOD, UNKNOWN, KO_ONLY };
+enum class Sol : Char { BAD, FAIR, GOOD, UNKNOWN, KO_ONLY, FORBIDDEN};
 typedef const Sol Sol_I;
 
 // convert sol to integer
@@ -244,4 +244,22 @@ inline void operator-=(Trans_IO &trans1, Trans_I trans2)
 	trans1.set_rot(mod(trans1.rot() - trans2.rot(), 4));
 	if (trans2.flip())
 		trans1.set_flip(!trans1.flip());
+}
+
+inline Sol sco22sol(Int_I score2, Who_I who)
+{
+	Int score4_draw = board_Nx()*board_Ny() * 2;
+	if (who == Who::BLACK)
+		score4_draw += komi2();
+	else if (who == Who::WHITE)
+		score4_draw -= komi2();
+	else
+		error("illegal player!");
+	Int score4 = 2 * score2;
+	if (score4 > score4_draw)
+		return Sol::GOOD;
+	else if (score4 < score4_draw)
+		return Sol::BAD;
+	else
+		return Sol::FAIR;
 }

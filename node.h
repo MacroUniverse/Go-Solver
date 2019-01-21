@@ -112,11 +112,12 @@ public:
 // assuming the parents are in order
 Int Node::parent(Long_I treeInd) const
 {
-	Long forkInd;
-	todo: error here, m_last[i] might be negative! try to solve this!
-	if (lookupInt(forkInd, m_last, treeInd))
-		error("parent does not exist!");
-	return forkInd;
+	Int i;
+	for (i = nlast() - 1; i >= 0; ++i) {
+		if (last(i) == treeInd)
+			return i;
+	}
+	error("parent not found!");
 }
 
 // ind = -1 : last element, ind = -2 : second last element, etc.
