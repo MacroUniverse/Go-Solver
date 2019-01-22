@@ -114,6 +114,7 @@ public:
 	// return -1 if double pass caused game end
 	// return -2 if double pass attempted but game did not finish, this is treated as a ko
 	// return 1 if linked to an existing node
+	// return 2 if passing leas to a ko
 	inline Int pass(Long_I treeInd = -1);
 
 	inline Int check(Char_I x, Char_I y, Long_I treeInd = -1);
@@ -361,7 +362,8 @@ inline Int Tree::pass(Long_I treeInd /*optional*/)
 		return 1;
 	}
 	else if (ret == -2) { // situation exists, is a ko
-		error("unlikely case, check this!");
+		ko_link(treeInd1, Move(Act::PASS), treeInd_found);
+		return 2;
 	}
 	else if (ret == 0) { // configuration does not exist
 		error("impossible case, configuration must exist!");
@@ -681,7 +683,7 @@ inline void Tree::writeSGF01(ofstream &fout, Long_I treeInd1, const string &pref
 	// add node number to title
 	fout << "N[" << prefix << "[" << treeInd1 << "\\]";
 	// add score
-	if (solved(treeInd1))
+	if (solved(treeInd1) || solution(treeInd1) == Sol::KO_ONLY)
 		fout << 0.5*score2(treeInd1);
 	// end title
 	fout << "]";
@@ -827,6 +829,9 @@ inline Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 		else if (ret == 1) {
 			return 1; // linked to existing node
 		}
+		else if (ret == 2) {
+			return 2; // linked to existing node, has Ko
+		}
 		else
 			error("unhandled case!");
 	}
@@ -921,9 +926,9 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 	}
 
 	// enumerate children
-	Bool debug_stop = treeInd1 == 670 || nnode() >= 670; // debug
+	Bool debug_stop = false; // nnode() >= 2492 || treeInd1 == 1; // debug
 	Bool save = false;
-	for (i = 0; i < 1000; ++i) {
+	for (i = 0; i < 100000; ++i) {
 
 		//###########################################################
 		move_ret = rand_smart_move(treeInd1);
@@ -1011,6 +1016,11 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 		else if (move_ret == -1) {
 			// all children exist
 			if (!has_ko_link && !has_ko_child) {
+				if (best_solvable_child_sco2 < 0) {
+					// all children are forbidden
+					set_solution(Sol::FORBIDDEN, treeInd);
+					return 3;
+				}
 				// all children solved
 				if (best_solvable_child_sol == Sol::FAIR) {
 					set_solution(Sol::FAIR, treeInd1);

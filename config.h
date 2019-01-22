@@ -536,7 +536,11 @@ Bool Config::is_game_end() const
 			else if (qi == 2) {
 				if (is_dumb_2eye_filling(x, y, Who::BLACK) || is_dumb_2eye_filling(x, y, Who::WHITE))
 					return false;
-				error("check mutual life here! not implemened!");
+				cout << "warning: check mutual life for large board, ignore for now" << endl;
+				cout << "warning: check mutual life for large board, ignore for now" << endl;;
+				cout << "warning: check mutual life for large board, ignore for now" << endl;;
+				cout << "warning: check mutual life for large board, ignore for now" << endl;;
+				return false;
 			}
 		}
 	}

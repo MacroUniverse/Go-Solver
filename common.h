@@ -118,6 +118,10 @@ inline Int komi2(Int_I k2 = -1132019)
 // complementary territory (opponent's territory)
 inline Int inv_territory2(Int_I territory2)
 {
+#ifdef GOS_CHECK_BOUND
+	if (territory2 > board_Nx() * board_Ny() * 2 || territory2 < 0)
+		error("illegal territory!");
+#endif
 	return 2 * board_Nx()*board_Ny() - territory2;
 }
 

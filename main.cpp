@@ -16,4 +16,5 @@ int main()
 	// end edit board
 
 	tree.solve();
+	tree.writeSGF("test.sgf");
 }
