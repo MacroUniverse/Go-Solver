@@ -1,5 +1,6 @@
 #pragma once
-#include "common.h"
+#include "group.h"
+#include "SLISC/sort.h"
 
 class Config;
 typedef Config Config_O, Config_IO;
@@ -43,11 +44,11 @@ public:
 	// if (x,y) already have a stone, "who" argument is not used
 	// "mark" will mark connected stones and their qi.
 	// "group" has the coordinates of the connected stones
-	void connect(MatChar_O & mark, Int_O &qi, vector<Move> /*_O*/ &group,
+	void connect(MatChar_O & mark, vector<Move> &qi, vector<Move> /*_O*/ &group,
 		Char_I x, Char_I y, Who_I who = Who::DEFAULT) const;
 
 	// internal recursive function called by connect()
-	void connect0(MatChar_IO & mark, Int_IO &qi, vector<Move> /*_IO*/ &group,
+	void connect0(MatChar_IO & mark, vector<Move> &qi, vector<Move> /*_IO*/ &group,
 		Char_I x, Char_I y, Who_I who = Who::DEFAULT) const;
 
 	// get all qi's connected to one qi
@@ -77,6 +78,75 @@ public:
 	// if filling a big eye surrounded by connected stones
 	Bool is_dumb_2eye_filling(Char_I x, Char_I y, Who_I who) const;
 
+	// list all legal placing in random order
+	void rand_legal_placing(vector<Move> &pos, Who_I who)
+	{
+		// TODO
+	}
+
+	// check atari for opponent group, generate all available moves and try to put the better moves first
+	// for now, order the moves according to # of stones that can be removed
+	// the moves only includes placing, not passing
+	void eat_list(vector<Move> &pos, Who_I who) const
+	{
+		using slisc::sort2;
+		Int i, Nqi, Ndead, Ngroup;
+		vector<Group> groups;
+		vector<Int> dead_group_inds;
+		vector<Int> dead_group_size;
+
+		pos.resize(0);
+		all_groups(groups, ::next(who));
+		Ngroup = groups.size();
+
+		for (i = 0; i < groups.size(); ++i) {
+			Nqi = groups[i].qi().size();
+			if (Nqi == 1) {
+				dead_group_inds.push_back(i);
+				dead_group_size.push_back(Nqi);
+			}
+		}
+
+		Ndead = dead_group_inds.size();
+		
+		if (Ndead == 0)
+			return;
+		else if (Ndead == 1) {
+			pos.push_back(groups[dead_group_inds[0]].qi()[0]);
+			return;
+		}
+		else {
+			// more than one dead group
+			sort2(dead_group_size, dead_group_inds); // ascending order
+			pos.resize(Ndead);
+			for (i = Ndead - 1; i >= 0; --i) {
+				pos[i] = groups[dead_group_inds[i]].qi()[0];
+			}
+		}
+	}
+
+	// find all groups for a player
+	void all_groups(vector<Group> &groups, Who_I who) const
+	{
+		Char x, y, Nx = board_Nx(), Ny = board_Ny();
+		Int i;
+		MatChar tot_mark(Nx, Ny, Char(0)), mark;
+		Group group;
+		for (y = 0; y < Ny; ++y) {
+			for (x = 0; x < Nx; ++x) {
+				if (m_data(x, y) == who && !tot_mark(x, y)) {
+					groups.push_back(Group());
+					vector<Move> &qi = groups.back().qi();
+					vector<Move> &group = groups.back().pos();
+					connect(mark, qi, group, x, y, who);
+					for (i = 0; i < group.size(); ++i) {
+						tot_mark(group[i].x(), group[i].y()) = 1;
+					}
+				}
+			}
+		}
+	}
+
 	// decide the best transformations (rotation and stone color flipping) to make a configuration "largest"
 	// NONE:0 < WHITE:1 < BLACK:2
 	// return true: if needs to flip
@@ -96,9 +166,6 @@ public:
 
 	// move internal data from one config to another without copying
 	void operator<<(Config_IO &rhs);
-
-	// rotate a board itself
-	void rotate(Int_I rot);
 
 	// transform a board itself
 	void transform(Trans_I trans);
@@ -276,7 +343,7 @@ inline Int Config::check(Char_I x, Char_I y, Who_I who) const
 	Int Nx = board_Nx(), Ny = board_Ny(), Nremove = 0;
 
 	// output of connect()
-	MatChar mark(Nx, Ny, Char(0)); vector<Move> group; Int qi;
+	MatChar mark(Nx, Ny, Char(0)); vector<Move> group; vector<Move> qi;
 
 	// check if already occupied
 	if (m_data(x, y) != Who::NONE)
@@ -286,25 +353,25 @@ inline Int Config::check(Char_I x, Char_I y, Who_I who) const
 	// only necessary if placed next to opposite stone
 	if (x > 0 && m_data(x - 1, y) == next(who)) {
 		connect(mark, qi, group, x - 1, y);
-		if (qi == 1)
+		if (qi.size() == 1)
 			Nremove += group.size();
 	}
 
 	if (y > 0 && m_data(x, y - 1) == next(who) && !mark(x, y - 1)) {
 		connect(mark, qi, group, x, y - 1);
-		if (qi == 1)
+		if (qi.size() == 1)
 			Nremove += group.size();
 	}
 
 	if (x < Nx - 1 && m_data(x + 1, y) == next(who) && !mark(x + 1, y)) {
 		connect(mark, qi, group, x + 1, y);
-		if (qi == 1)
+		if (qi.size() == 1)
 			Nremove += group.size();
 	}
 
 	if (y < Ny - 1 && m_data(x, y + 1) == next(who) && !mark(x, y + 1)) {
 		connect(mark, qi, group, x, y + 1);
-		if (qi == 1)
+		if (qi.size() == 1)
 			Nremove += group.size();
 	}
 
@@ -313,7 +380,7 @@ inline Int Config::check(Char_I x, Char_I y, Who_I who) const
 
 	// check qi assuming stone is placed
 	connect(mark, qi, group, x, y, who);
-	if (qi == 0) return -2;
+	if (qi.size() == 0) return -2;
 
 	return 0;
 }
@@ -334,7 +401,7 @@ inline Int Config::place(Char_I x, Char_I y, Who_I who)
 	Bool removed = false;
 
 	// output of connect()
-	MatChar mark(board_Nx(), board_Ny(), Char(0)); vector<Move> group; Int qi = 0;
+	MatChar mark(board_Nx(), board_Ny(), Char(0)); vector<Move> group; vector<Move> qi;
 
 	// check if already occupied
 	if (m_data(x, y) != Who::NONE)
@@ -347,28 +414,28 @@ inline Int Config::place(Char_I x, Char_I y, Who_I who)
 	// only necessary if placed next to opposite stone
 	if (x > 0 && m_data(x - 1, y) == next(who)) {
 		connect(mark, qi, group, x - 1, y);
-		if (qi == 0) {
+		if (qi.size() == 0) {
 			remove_group(group); removed = true;
 		}
 	}
 
 	if (y > 0 && m_data(x, y - 1) == next(who) && !mark(x, y - 1)) {
 		connect(mark, qi, group, x, y - 1);
-		if (qi == 0) {
+		if (qi.size() == 0) {
 			remove_group(group); removed = true;
 		}
 	}
 
 	if (x < Nx - 1 && m_data(x + 1, y) == next(who) && !mark(x + 1, y)) {
 		connect(mark, qi, group, x + 1, y);
-		if (qi == 0) {
+		if (qi.size() == 0) {
 			remove_group(group); removed = true;
 		}
 	}
 
 	if (y < Ny - 1 && m_data(x, y + 1) == next(who) && !mark(x, y + 1)) {
 		connect(mark, qi, group, x, y + 1);
-		if (qi == 0) {
+		if (qi.size() == 0) {
 			remove_group(group); removed = true;
 		}
 	}
@@ -377,7 +444,7 @@ inline Int Config::place(Char_I x, Char_I y, Who_I who)
 
 	// check qi of placed stone
 	connect(mark, qi, group, x, y);
-	if (qi == 0) return -2;
+	if (qi.size() == 0) return -2;
 
 	return 0;
 }
@@ -387,16 +454,16 @@ void Config::operator<<(Config_IO &rhs)
 	m_data << rhs.m_data;
 }
 
-inline void Config::connect(MatChar_O &mark, Int_O &qi, vector<Move> /*_O*/ &group,
+inline void Config::connect(MatChar_O &mark, vector<Move> &qi, vector<Move> /*_O*/ &group,
 	Char_I x, Char_I y, Who_I who_assume /*optional*/) const
 {
 	// init output
-	mark.resize(board_Nx(), board_Ny()); mark = 0; group.resize(0); qi = 0;
+	mark.resize(board_Nx(), board_Ny()); mark = 0; group.resize(0); qi.resize(0);
 	// connect (x,y) recursively
 	connect0(mark, qi, group, x, y, who_assume);
 }
 
-inline void Config::connect0(MatChar_IO &mark, Int_IO &qi, vector<Move> /*_IO*/ &group,
+inline void Config::connect0(MatChar_IO &mark, vector<Move> &qi, vector<Move> /*_IO*/ &group,
 	Char_I x, Char_I y, Who_I who_assume) const
 {
 	Char Nx = board_Nx(), Ny = board_Ny();
@@ -419,7 +486,7 @@ inline void Config::connect0(MatChar_IO &mark, Int_IO &qi, vector<Move> /*_IO*/ 
 		if (who == who0 && !rmark)
 			connect0(mark, qi, group, x - 1, y);
 		else if (who == Who::NONE && !rmark) {
-			++qi; rmark = 1;
+			qi.push_back(Move(x - 1, y)); rmark = 1;
 		}
 	}
 
@@ -429,7 +496,7 @@ inline void Config::connect0(MatChar_IO &mark, Int_IO &qi, vector<Move> /*_IO*/ 
 		if (who == who0 && !rmark)
 			connect0(mark, qi, group, x + 1, y);
 		else if (who == Who::NONE && !rmark) {
-			++qi; rmark = 1;
+			qi.push_back(Move(x + 1, y)); rmark = 1;
 		}
 	}
 
@@ -439,7 +506,7 @@ inline void Config::connect0(MatChar_IO &mark, Int_IO &qi, vector<Move> /*_IO*/ 
 		if (who == who0 && !rmark)
 			connect0(mark, qi, group, x, y - 1);
 		else if (who == Who::NONE && !rmark) {
-			++qi; rmark = 1;
+			qi.push_back(Move(x, y - 1)); rmark = 1;
 		}
 	}
 
@@ -449,7 +516,7 @@ inline void Config::connect0(MatChar_IO &mark, Int_IO &qi, vector<Move> /*_IO*/ 
 		if (who == who0 && !rmark)
 			connect0(mark, qi, group, x, y + 1);
 		else if (who == Who::NONE && !rmark) {
-			++qi; rmark = 1;
+			qi.push_back(Move(x, y + 1)); rmark = 1;
 		}
 	}
 }
@@ -603,29 +670,29 @@ inline Bool Config::is_dumb_eye_filling(Char_I x, Char_I y, Who_I who) const
 	Int Nx = board_Nx(), Ny = board_Ny();
 
 	// output of connect()
-	MatChar mark(Nx, Ny); vector<Move> group; Int qi;
+	MatChar mark(Nx, Ny); vector<Move> group; vector<Move> qi;
 
 	// check qi of sourrounding 4 stones
 	// if only 1 qi, it's not dumb
 
 	if (x > 0) {
 		connect(mark, qi, group, x - 1, y);
-		if (qi == 1) return false;
+		if (qi.size() == 1) return false;
 	}
 
 	if (y > 0 && !mark(x, y - 1)) {
 		connect(mark, qi, group, x, y - 1);
-		if (qi == 1) return false;
+		if (qi.size() == 1) return false;
 	}
 
 	if (x < Nx - 1 && !mark(x + 1, y)) {
 		connect(mark, qi, group, x + 1, y);
-		if (qi == 1) return false;
+		if (qi.size() == 1) return false;
 	}
 
 	if (y < Ny - 1 && !mark(x, y + 1)) {
 		connect(mark, qi, group, x, y + 1);
-		if (qi == 1) return false;
+		if (qi.size() == 1) return false;
 	}
 
 	// it is dumb...
@@ -640,7 +707,7 @@ inline Bool Config::is_dumb_2eye_filling(Char_I x, Char_I y, Who_I who) const
 	Bool found_qi = false, connected = false;
 
 	// output of connect()
-	MatChar mark(Nx, Ny); vector<Move> group; Int qi;
+	MatChar mark(Nx, Ny); vector<Move> group; vector<Move> qi;
 
 	// check qi of sourrounding 3 stones and one qi
 

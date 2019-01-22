@@ -94,8 +94,10 @@ If neither ko (打劫) nor upward fork is considered, the above algorithm for so
 * A ko node always has all children enumerated.
 * A link to a ko node is a ko child if forbidden when any ko is not resolved.
 
-
-
+### Flipped Ko
+* A flipped Ko is a same situation in the upstream of a node, with the colors of all stones flipped.
+* This case is usually found after a player commits suicide, but also occur in some other cases such as passing.
+* The theory for this is unclear, but the algorithm can fix this by preventing suicide.
 
 ## GNU go
 GNU go can play 5x5 to 19x19 boards. So it might be used to guess the best child for these boards. Another advantage is it might be written in c.
@@ -108,3 +110,5 @@ Other projects such as mini-go probably requires some training.
 * Try to prevent suicide move (no stone left)
 * Try to make smarter moves firs
 * Clean tree to show whinning strategy.
+* After resolving a trivial ko, the downstream ko nodes should be solved as well, left only with non-trivial ko's.
+* eat_pos() did not consider eating two groups at the same time

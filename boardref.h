@@ -93,6 +93,22 @@ public:
 		inv_transf(x1, y1, who1, m_trans);
 		return m_config.is_dumb_2eye_filling(x1, y1, who1);
 	}
+
+	void eat_list(vector<Move> &pos, Who_I who) const
+	{
+		Int i;
+		Who who1;
+		if (m_trans.flip()) {
+			who1 = ::next(who);
+		}
+		else {
+			who1 = who;
+		}
+		m_config.eat_list(pos, who1);
+		for (i = 0; i < pos.size(); ++i) {
+			transf(pos[i].x(), pos[i].y(), m_trans.rot());
+		}
+	}
 };
 
 typedef const BoardRef BoardRef_I;

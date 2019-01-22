@@ -784,6 +784,28 @@ inline Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 	VecInt xy;
 	Long_I treeInd1 = def(treeInd);
 	Node & node = m_nodes[treeInd1];
+	
+	BoardRef board = get_board(treeInd1);
+	vector<Move> eat_pos;
+
+	// consider placing that can eat stones
+	board.eat_list(eat_pos, ::next(who(treeInd1)));
+	for (i = 0; i < eat_pos.size(); ++i) {
+		x = eat_pos[i].x(); y = eat_pos[i].y();
+		// check existence
+		if (next_exist(Move(x, y), treeInd1))
+			continue;
+		// check legal and number of removal
+		ret = place(x, y, treeInd1);
+		if (ret == -1)
+			continue; // illegal move, no change
+		else if (ret == 0)
+			return 0; // new node created
+		else if (ret == 1)
+			return 1;  // linked to an existing node, no Ko
+		else if (ret == -2)
+			return 2; // linked to existing node, has Ko
+	}
 
 	// random sequence of all grid points on board
 	randPerm(xy, Nxy);
@@ -799,10 +821,10 @@ inline Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 		if (ret < 0)
 			continue;
 		// check dumb eye filling
-		if (get_board(treeInd1).is_dumb_eye_filling(x, y, ::next(who(treeInd1)))) {
+		if (board.is_dumb_eye_filling(x, y, ::next(who(treeInd1)))) {
 			continue;
 		}
-		if (get_board(treeInd1).is_dumb_2eye_filling(x, y, ::next(who(treeInd1)))) {
+		if (board.is_dumb_2eye_filling(x, y, ::next(who(treeInd1)))) {
 			continue;
 		}
 		ret = place(x, y, treeInd1);

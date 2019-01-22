@@ -146,6 +146,7 @@
     <ClInclude Include="boardref.h" />
     <ClInclude Include="common.h" />
     <ClInclude Include="config.h" />
+    <ClInclude Include="group.h" />
     <ClInclude Include="move.h" />
     <ClInclude Include="node.h" />
     <ClInclude Include="pool.h" />

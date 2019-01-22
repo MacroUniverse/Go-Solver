@@ -51,6 +51,10 @@ public:
 
 	void init() { m_x = -3; } // init game
 
+	Char & x(); // x coordinate of PLACE
+
+	Char & y(); // y coordinate of PLACE
+
 	// === destructor ===
 	~Move() {}
 };
@@ -124,6 +128,23 @@ inline void Move::place(Char_I x, Char_I y)
 		error("Move::Move(x, y): coord < 0 !");
 #endif
 	m_x = x; m_y = y;
+}
+
+inline Char & Move::x()
+{
+#ifdef GOS_CHECK_BOUND
+	if (m_x < 0)
+		error("Move::x(): not a coord!");
+#endif
+	return m_x;
+}
+
+inline Char & Move::y()
+{
+#ifdef GOS_CHECK_BOUND
+	if (m_x < 0) error("Move::y(): not a coord!");
+#endif
+	return m_y;
 }
 
 Bool operator==(Move_I &mov1, Move_I &mov2)
