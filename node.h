@@ -87,6 +87,10 @@ public:
 
 	void set_sco2(Int_I score2)
 	{
+#ifdef GOS_CHECK_BOUND
+		if (score2 < 0 || score2 > board_Nx()*board_Ny() * 2)
+			error("illegal score2!");
+#endif
 		m_score2 = score2;
 	}
 

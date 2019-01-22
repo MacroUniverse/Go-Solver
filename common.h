@@ -27,8 +27,29 @@ typedef Who Who_IO, Who_O;
 enum class Act : Char { PLACE, PASS, EDIT, INIT }; // TODO: make this a char type
 typedef const Act Act_I;
 
-enum class Sol : Char { BAD, FAIR, GOOD, UNKNOWN, KO_ONLY, FORBIDDEN};
+enum class Sol : Char { BAD, FAIR, GOOD, UNKNOWN, KO_GOOD, KO_BAD, KO_FAIR, FORBIDDEN};
 typedef const Sol Sol_I;
+
+inline Bool is_ko_sol(Sol_I sol)
+{
+	if (sol == Sol::KO_GOOD || sol == Sol::KO_FAIR || sol == Sol::KO_BAD) {
+		return true;
+	}
+	return false;
+}
+
+inline Sol sol2ko_sol(Sol_I sol)
+{
+	if (sol == Sol::GOOD)
+		return Sol::KO_GOOD;
+	else if (sol == Sol::FAIR)
+		return Sol::KO_FAIR;
+	else if (sol == Sol::BAD)
+		return Sol::KO_BAD;
+	else
+		error("illegal sol!");
+	return Sol::UNKNOWN;
+}
 
 // convert sol to integer
 inline Int sol2int(Sol_I sol)
@@ -42,7 +63,7 @@ inline Int sol2int(Sol_I sol)
 	if (sol == Sol::UNKNOWN) {
 		return -1; error("is this even useful?");
 	}
-	if (sol == Sol::KO_ONLY) {
+	if (is_ko_sol(sol)) {
 		return -2; error("is this even useful?");
 	}
 	error("illegal sol!");
