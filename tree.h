@@ -24,6 +24,9 @@ public:
 	vector<Long> m_ko_link_to;
 	vector<Long> m_ko_link_from;
 
+	// ko nodes with all ko links resolved
+	vector<Long> m_clean_ko_node;
+
 	// === const functions ===
 
 	// return a reference to the transformed Board of a node
@@ -159,8 +162,8 @@ public:
 
 	inline Bool next_exist(Move mov, Long_I treeInd = -1); // does next node have this mov already?
 
-														   // make a random move for a node
-														   // only pass if all other moves are onsidered
+	// make a random move for a node
+	// only pass if all other moves are onsidered
 	inline Int rand_move(Long_I treeInd = -1);
 
 	// smarter random move for a node
@@ -194,6 +197,45 @@ public:
 	// return 2 if is a ko node with all ko links resolved
 	// return 3 if is a forbidden node
 	inline Int solve(Long_I treeInd = -1);
+
+	// entering a ko 
+	inline Int solve_ko(Long_I treeInd = -1);
+
+	// change a ko link to normal link
+	inline void ko_link_2_link(Long_I treeInd_from, Long_I treeInd_to)
+	{
+		Int i;
+		Node & node_from = node(treeInd_from);
+		Node & node_to = node(treeInd_to);
+		for (i = node_from.nnext() - 1; i >= 0; --i) {
+			if (node_from.next(i) == treeInd_to) {
+				node_from.next_ko_link_2_link(i);
+			}
+		}
+		for (i = node_to.nlast() - 1; i >= 0; --i) {
+			if (node_to.last(i) == treeInd_from) {
+				node_to.last_ko_link_2_link(i);
+			}
+		}
+	}
+
+	// change a normal link to ko link
+	inline void link_2_ko_link(Long_I treeInd_from, Long_I treeInd_to)
+	{
+		Int i;
+		Node & node_from = node(treeInd_from);
+		Node & node_to = node(treeInd_to);
+		for (i = node_from.nnext() - 1; i >= 0; --i) {
+			if (node_from.next(i) == treeInd_to) {
+				node_from.next_link_2_ko_link(i);
+			}
+		}
+		for (i = node_to.nlast() - 1; i >= 0; --i) {
+			if (node_to.last(i) == treeInd_from) {
+				node_to.last_link_2_ko_link(i);
+			}
+		}
+	}
 
 	// the winner of a node
 	Who winner(Long treeInd = -1) const;
@@ -273,6 +315,58 @@ public:
 		return Nko;
 	}
 
+	// shift downstream ko links to a node
+	// change all downstream ko links to the upstream to normal links
+	// and change normal links from all parents to ko links
+	// this node must not be a clean ko node
+	void shift_ko_links(Long_I treeInd = -1)
+	{
+		Int i;
+		Long treeInd1 = def(treeInd);
+		Node & node = Tree::node(treeInd1);
+		// destroy ko links from downstream to upstream
+		shift_ko_links0(treeInd1, treeInd1);
+		// change all parents as descendents with a ko link
+		for (i = node.nlast() - 1; i >= 0; --i) {
+			if (!node.is_last_ko_link(i)) {
+				link_2_ko_link(node.last(i), treeInd1);
+			}
+		}
+	}
+
+	Bool is_ko_child(Long_I treeInd, Int_I forkInd)
+	{
+		Long treeInd1 = def(treeInd);
+		return is_ko_sol(solution(next(treeInd1, forkInd)));
+	}
+
+	// internal recursive function called by shift_ko_links()
+	// treeInd1 is the node in shift_ko_links
+	void shift_ko_links0(Long_I &treeInd1, Long_I treeInd)
+	{
+		Int i;
+		Long ko_treeInd;
+		Node & node = Tree::node(treeInd);
+		for (i = 0; i < node.nnext(); ++i) {
+			if (is_ko_child(treeInd, i)) {
+				// found a ko child
+				shift_ko_links0(treeInd1, node.next(i));
+			}
+			else if (node.is_next_ko_link(i)) {
+				// found a ko link
+				ko_treeInd = node.next(i);
+				if (ko_treeInd == treeInd) {
+					continue;
+				}
+				else if (islinked(ko_treeInd, treeInd)) {
+					// change ko link to normal link
+					ko_link_2_link(treeInd, ko_treeInd);
+				}
+			}
+			// ignoring normal child
+		}
+	}
+
 	~Tree() {}
 };
 
@@ -302,7 +396,7 @@ inline Bool Tree::isend(Long_I treeInd /*optional*/) const
 
 inline Bool Tree::is_next_ko(Long_I treeInd /*optional*/, Int_I forkInd /*optional*/) const
 {
-	if (m_nodes[def(treeInd)].is_next_ko(forkInd))
+	if (m_nodes[def(treeInd)].is_next_ko_link(forkInd))
 		return true;
 	return false;
 }
@@ -1013,8 +1107,9 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 			} // end debug
 
 			if (solve_ret == -1) {
-				// is a ko node
+				// is a ko child
 				if (solution(child_treeInd) == Sol::KO_GOOD) {
+					// is a good ko child
 					set_score2(inv_score2(score2(child_treeInd)), treeInd1);
 					set_solution(Sol::KO_BAD, treeInd1);
 					if (resolve_ko(treeInd1)) {
@@ -1023,6 +1118,7 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 					}
 					else {
 						// all downstream ko resolved !
+						m_clean_ko_node.push_back(treeInd1);
 						return 2; // debug break point
 					}
 				}
@@ -1117,15 +1213,19 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 					resolve_ko(treeInd1);
 					return 0;
 				}
-				set_score2(inv_score2(best_ko_child_sco2), treeInd1);
-				calc_ko_sol(treeInd1);
-				if (resolve_ko(treeInd1)) {
-					// still have unresolved ko link
-					return -1;
-				}
 				else {
-					// all downstream ko resolved !
-					return 2; // debug break point
+					// this is a ko node
+					set_score2(inv_score2(best_ko_child_sco2), treeInd1);
+					calc_ko_sol(treeInd1);
+					if (resolve_ko(treeInd1)) {
+						// still have unresolved ko link
+						return -1;
+					}
+					else {
+						// all downstream ko resolved !
+						m_clean_ko_node.push_back(treeInd1);
+						return 2; // debug break point
+					}
 				}
 			}
 			else { // (has_ko_link && has_ko_child)
@@ -1144,6 +1244,35 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 			error("unhandled return!");
 	}
 	error("unkown error!"); return -1;
+}
+
+// try to solve a ko node (treeInd_to) when it has been linked
+// the new link is from treeInd_from
+// return 0 if linked to a clean ko node (a clean ko node is treated as a solvable child)
+inline Int Tree::solve_ko(Long_I treeInd)
+{
+	Int i;
+	Long treeInd1 = def(treeInd);
+	if (m_ko_link_from.size() != 0) {
+		// not all ko links resolved
+		error("unhandled case!");
+	}
+
+	// check clean ko node
+	for (i = m_clean_ko_node.size() - 1; i >= 0; --i) {
+		if (treeInd1 == m_clean_ko_node[i]) {
+			// is a clean ko node
+			return 0;
+		}
+	}
+
+	Node & node = Tree::node(treeInd1);
+
+	// shift ko links to curren node
+	shift_ko_links(treeInd1);
+
+	// Now we can start solving!
+	TODO
 }
 
 Who Tree::winner(Long treeInd) const

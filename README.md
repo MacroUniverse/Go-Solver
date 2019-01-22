@@ -77,27 +77,27 @@ Important data members:
 If neither ko (打劫) nor upward fork is considered, the above algorithm for solving a node can be implemented easily with a recursive function `Sol Tree::solve(treeInd)`, which tries to solve a node's children one by one, by calling `solve()` itself. The end node is automatically solved when it is born (by `Tree::pass()`).
 
 ### Basic Ko
-* A basic ko is two nodes linked by a ko link and a normal linked.
-* If any child of any node is good, or if the best children of both nodes are fair, then the two nodes can be solved and scored.
-* If the best children of both nodes are both bad or one bad one fair, neither node will have a solution (thus, not all situations have a solution!). Who enter the ko node first will have a worse result.
+* A basic ko is two nodes linked by a ko link and a normal link.
+* If any other child of one node is good, or if the best children of both nodes are fair, then the two nodes can be solved and scored.
+* If the best children of both nodes are both bad or one bad one fair, neither node will have a solution (thus, not all situations have a solution!). Who enter the ko node first will have a worse result comparing to entering second.
 
 ### General Ko
 * A ko (a ko loop with 2 or more nodes) is called a trivial ko if all it's node are solvable. Otherwise, it is called a non-trivial ko.
 * There are three kinds of child: solvable child, ko link and ko child (a child that is a ko node). A forbidden child is not a child.
 * A ko that includes a solvable node is a trivial ko.
-* Thus all nodes in a non-trivial loop is not solvable. They can only have bad or fair solvable child.
+* Thus all nodes in a non-trivial loop is not solvable. They can only have bad or fair solvable children.
 * When a node has at least a ko link or at least a ko child, if it has a good child, it is solvable (bad).
-* If a node has at least a ko link but no ko child, it is a ko node, set the score of this node based on the best solved children (this score is over-estimated). If there is no child, this node is a forbidden child instead.
-* If a node has at least a ko child but no ko link, then solve the other children one by one. If there exists a solvable child with a equal or higher score than the best ko child, then the node can be solved based on the best solvable child. Otherwise, this is a ko node, set the score of this node based on the best ko child.
-* If a node has at least a ko link and at least a ko child, then this node is a ko node, set the score of this node based on the score of all children except ko links.
+* If a node has at least a ko link but no ko child, it is a ko node, set the score and solution of this node based on the best solved children (this score is over-estimated). If there is no child, this node is forbidden instead.
+* If a node found a good ko child, but not good solvable child, then it is a bad ko child. No need to check other children.
+* If a node has at least a non-good ko child but no ko link, then solve the other children one by one. If there exists a solvable child with a equal or higher score than the best ko child, then the node can be solved based on the best solvable child. Otherwise, this is a ko node, set the score and solution based on the best ko child.
+* If a node has at least a ko link and at least a non-good ko child, then this node is a ko node, set the score and solution based on the score of all children except ko links.
 * A parent of node that resolves all the ko link (it will not have ko link) can be solved based on the best children.
-* A ko node always has all children enumerated.
-* A link to a ko node is a ko child if forbidden when any ko is not resolved.
+* A non-bad ko node always has all children checked.
 
 ### Flipped Ko
 * A flipped Ko is a same situation in the upstream of a node, with the colors of all stones flipped.
-* This case is usually found after a player commits suicide, but also occur in some other cases such as passing.
-* The theory for this is unclear, but the algorithm can fix this by preventing suicide.
+* A flipped ko is when the player creating a same situation for himself.
+* For now I'm assuming all flipped ko are trivial and checking for non-trivial case.
 
 ## GNU go
 GNU go can play 5x5 to 19x19 boards. So it might be used to guess the best child for these boards. Another advantage is it might be written in c.
@@ -112,3 +112,5 @@ Other projects such as mini-go probably requires some training.
 * Clean tree to show whinning strategy.
 * After resolving a trivial ko, the downstream ko nodes should be solved as well, left only with non-trivial ko's.
 * eat_pos() did not consider eating two groups at the same time
+* Ko child is equivalent to a normal child when calculating parent score. So there is no need to check other children when a ko child wins.
+* KO_ONLY should probably be split into KO_GOOD, KO_BAD, KO_FAIR.

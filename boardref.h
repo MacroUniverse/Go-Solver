@@ -2,6 +2,8 @@
 #include "config.h"
 #include "board.h"
 
+class Board;
+
 // constant reference type to board
 // has all const functions of Board
 // cannot be edited

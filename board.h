@@ -6,6 +6,8 @@ class Board;
 typedef const Board Board_I;
 typedef Board Board_O, Board_IO;
 
+class BoardRef;
+
 // config with transformation information
 class Board
 {
@@ -37,7 +39,7 @@ public:
 	}
 
 	// copy from BoardRef
-	void operator=(BoardRef &rhs)
+	void operator=(const BoardRef &rhs)
 	{
 		m_config = rhs.config();
 		m_trans = rhs.trans();

@@ -60,18 +60,24 @@ public:
 		return false;
 	}
 
-	Long last(Int_I ind) const
+	Long last(Int_I forkInd) const
 	{
-		Long ret = m_last[ind];
+		Long ret = m_last[forkInd];
 		if (ret < 0)
 			return -ret - 1;
 		else
 			return ret;
 	}
+
+	Bool is_last_ko_link(Int_I forkInd) const
+	{
+		return m_last[forkInd] < 0;
+	}
+
 	Int nnext() const { return m_next.size(); }
 	inline Long next(Int_I ind) const; // tree index for a child
 	inline Bool isend() const; // is this a bottom node (end of game)?
-	inline Bool is_next_ko(Int_I ind) const; // is this a ko link?
+	inline Bool is_next_ko_link(Int_I ind) const; // is this a ko link?
 
 	// set 0-th node (empty board)
 	void init()
@@ -111,6 +117,46 @@ public:
 	void set(Who_I who, Long_I poolInd, Trans_I trans)
 	{
 		m_who = who; m_poolInd = poolInd; m_trans = trans;
+	}
+
+	// change a ko link in m_next to a normal link
+	void next_ko_link_2_link(Int_I forkInd)
+	{
+#ifdef GOS_CHECK_BOUND
+		if (!is_next_ko_link(forkInd))
+			error("not a ko link!");
+#endif
+		m_next[forkInd] = next(forkInd);
+	}
+
+	// change a ko link in m_last to a normal link
+	void last_ko_link_2_link(Int_I forkInd)
+	{
+#ifdef GOS_CHECK_BOUND
+		if (!is_last_ko_link(forkInd))
+			error("not a ko link!");
+#endif
+		m_last[forkInd] = last(forkInd);
+	}
+
+	// change a normal link in m_last to a ko link 
+	void last_link_2_ko_link(Int_I forkInd)
+	{
+#ifdef GOS_CHECK_BOUND
+		if (is_last_ko_link(forkInd))
+			error("not a normal link!");
+#endif
+		m_last[forkInd] = -last(forkInd)-1;
+	}
+
+	// change a normal link in m_next to a ko link 
+	void next_link_2_ko_link(Int_I forkInd)
+	{
+#ifdef GOS_CHECK_BOUND
+		if (is_next_ko_link(forkInd))
+			error("not a normal link!");
+#endif
+		m_next[forkInd] = -next(forkInd) - 1;
 	}
 
 	~Node() {}
@@ -153,7 +199,7 @@ inline Bool Node::isend() const
 }
 
 // ind = -1 : last element, ind = -2 : second last element, etc.
-inline Bool Node::is_next_ko(Int_I ind) const
+inline Bool Node::is_next_ko_link(Int_I ind) const
 {
 	Long treeInd;
 	if (ind < 0)
