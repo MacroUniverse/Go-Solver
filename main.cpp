@@ -15,6 +15,6 @@ int main()
 	tree.place(1, 1);
 	// end edit board
 
-	tree.solve();
+	tree.solve(1);
 	tree.writeSGF("test.sgf");
 }

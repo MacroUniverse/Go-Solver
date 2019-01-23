@@ -77,7 +77,7 @@ public:
 
 	const Node & lastNode(Long_I treeInd = -1, Int_I forkInd = 0) // return a reference of the last node of a node
 	{
-		return m_nodes[last(treeInd, forkInd)];
+		return m_nodes[last(def(treeInd), forkInd)];
 	}
 
 	// return an index of the next node of a node, fork can be negative
@@ -85,7 +85,7 @@ public:
 
 	const Node & nextNode(Long_I treeInd = -1, Int_I forkInd = 0) const // return a reference of the next node of a node
 	{
-		return m_nodes[next(treeInd, forkInd)];
+		return m_nodes[next(def(treeInd), forkInd)];
 	} // forkInd can be negative
 
 	// find the parent fork index of a child
@@ -141,15 +141,16 @@ public:
 	// return 0 if new node created
 	// return -1 if double pass caused game end
 	// return -2 if double pass attempted but game did not finish, this is treated as a ko
-	// return 1 if linked to an existing node
-	// return 2 if passing leas to a ko
+	// return 1 if linked to an existing normal node or clean ko node.
+	// return 2 if ko link is created
+	// return 3 if linked to an (unclean) ko node
 	inline Int pass(Long_I treeInd = -1);
 
 	inline Int check(Char_I x, Char_I y, Long_I treeInd = -1);
 
 	// return 0 if new node created (m_treeInd jumped)
 	// return 1 if linked to an existing normal node or clean ko node (m_treeInd jumped)
-	// return 2 if linked to a ko node
+	// return 2 if linked to a (unclean) ko node
 	// return -1 if illegal (nothing changes)
 	// return -2 if a ko is found and linked (m_treeInd unchanged)
 	// already has bound checking
@@ -162,7 +163,7 @@ public:
 
 	Node & nextNode(Long_I treeInd = -1, Int_I forkInd = 0) // return a reference of the next node of a node
 	{
-		return m_nodes[next(treeInd, forkInd)];
+		return m_nodes[next(def(treeInd), forkInd)];
 	}
 
 	// create normal link between two nodes
@@ -200,7 +201,7 @@ public:
 
 	inline void writeSGF(const string &name); // write the whole tree to file
 
-	inline void writeSGF0(vector<Long> &treeInds_written, ofstream &fout, Long_I treeInd = -1); // internal function called by writeSGF();
+	inline void writeSGF0(VecBool &check, ofstream &fout, Long_I treeInd = -1); // internal function called by writeSGF();
 
 	inline void writeSGF01(ofstream &fout, Long_I treeInd, const string &prefix = ""); // internal function called by writeSGF0();
 
@@ -250,9 +251,14 @@ public:
 	// the new link is from treeInd_from
 	// return 0 if solved to solvable node
 	// return 1 if solved to a clean ko node and pushed
-	Int solve_ko(Long_I treeInd = -1);
+	// return 2 if this is already a clean ko node
+	Int solve_ko(Long_I treeInd_from, Int_I forkInd);
 
 	// internal recursive function called by solve_ko()
+	// solve a ko node
+	// this function is similar to solve()
+	// return 0 if solved
+	// return 1 if is still a ko node
 	Int solve_ko0(Long_I treeInd1);
 
 	// change a ko link to normal link
@@ -338,6 +344,20 @@ public:
 				return i;
 		}
 		return -1;
+	}
+
+	// try to remove clean ko node record
+	// to nothing if not a clean ko node
+	// return 0 if removed
+	// return 1 if nothing is done
+	Int rm_clean_ko_node(Long_I treeInd = -1)
+	{
+		Int ind = check_clean_ko_node(def(treeInd));
+		if (ind >= 0) {
+			m_clean_ko_node.erase(m_clean_ko_node.begin() + ind);
+			return 0;
+		}
+		return 1;
 	}
 
 	// get the score of a clean ko node
@@ -431,23 +451,25 @@ public:
 		return Nko;
 	}
 
-	// shift downstream ko links to a node
+	// shift downstream ko links to a node (treeInd_to)
 	// change all downstream ko links to the upstream to normal links
 	// and change normal links from all parents to ko links
 	// this node must not be a clean ko node
-	void shift_ko_links(Long_I treeInd = -1)
+	void shift_ko_links(Long_I treeInd_from, Int_I forkInd)
 	{
 		Int i;
-		Long treeInd1 = def(treeInd);
-		Node & node = Tree::node(treeInd1);
+		Long treeInd_to = next(treeInd_from, forkInd);
+		Node & node = Tree::node(treeInd_to);
+		Move mov = unlink(treeInd_from, forkInd);
 		// destroy ko links from downstream to upstream
-		shift_ko_links0(treeInd1, treeInd1);
+		shift_ko_links0(treeInd_to, treeInd_to);
 		// change all parents as descendents with a ko link
 		for (i = node.nlast() - 1; i >= 0; --i) {
 			if (!node.is_last_ko_link(i)) {
-				link_2_ko_link(node.last(i), treeInd1);
+				link_2_ko_link(node.last(i), treeInd_to);
 			}
 		}
+		link(treeInd_from, mov, treeInd_to);
 	}
 
 	// internal recursive function called by shift_ko_links()
@@ -588,8 +610,14 @@ inline Int Tree::pass(Long_I treeInd /*optional*/)
 
 	if (ret == -1) { // situation exists, not a ko
 		link(treeInd1, Move(Act::PASS), treeInd_found);
-		if (treeInd < 0) m_treeInd = treeInd_found;
-		return 1;
+		if (is_ko_node(treeInd_found) && check_clean_ko_node(treeInd_found) == -1) {
+			// linked to a ko node but not clean
+			return 2;
+		}
+		else {
+			// linked to a normal node or a clean ko node
+			return 1;
+		}
 	}
 	else if (ret == -2) { // situation exists, is a ko
 		ko_link(treeInd1, Move(Act::PASS), treeInd_found);
@@ -607,8 +635,6 @@ inline Int Tree::pass(Long_I treeInd /*optional*/)
 	m_nodes.back().set(::next(who(treeInd1)), m_pool.poolInd(orderInd), board.trans());
 	link(treeInd1, Move(Act::PASS), max_treeInd());
 	m_pool.link(orderInd, ::next(who_config(treeInd1)), max_treeInd());
-
-	if (treeInd < 0) m_treeInd = max_treeInd();
 	return 0;
 }
 
@@ -646,7 +672,6 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 		m_nodes.push_back(Node());
 		m_nodes.back().set(Who::BLACK, m_pool.size() - 1, board.trans());
 		link(treeInd1, Move(x, y), max_treeInd());
-		if (treeInd < 0) m_treeInd = 1;
 		return 0;
 	}
 
@@ -668,7 +693,6 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 			}
 			else {
 				// linked to a normal node or a clean ko node
-				if (treeInd < 0) m_treeInd = treeInd_found;
 				return 1;
 			}
 		}
@@ -697,7 +721,6 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 	}
 
 	link(treeInd1, Move(x, y), max_treeInd());
-	if (treeInd<0) ++m_treeInd;
 	return 0;
 }
 
@@ -713,6 +736,8 @@ inline Int Tree::islinked(Long_I treeInd1, Long_I treeInd2)
 		if (treeInd == treeInd1) return 1; // found treeInd2
 		if (m_nodes[treeInd].nlast() > 1) break; // multiple upward fork
 		if (treeInd == 0) return 0; // reached top of tree
+		if (m_nodes[treeInd].is_last_ko_link(0))
+			error("lonely parent!");
 		treeInd = m_nodes[treeInd].last(0); // single line, go up
 	}
 	for (i = 0; i < m_nodes[treeInd].nlast(); ++i) {
@@ -805,7 +830,7 @@ inline void Tree::writeSGF_old(const string &name)
 
 inline void Tree::writeSGF(const string &name)
 {
-	vector<Long> treeInds_written;
+	VecBool check(nnode(), false);
 	Char Nx = board_Nx(), Ny = board_Ny();
 	ofstream fout(name);
 	fout << "(\n";
@@ -822,8 +847,8 @@ inline void Tree::writeSGF(const string &name)
 	Int i; Char x, y;
 
 	fout.flush(); // debug
-	writeSGF0(treeInds_written, fout, 1);
-	if (max_treeInd != Tree::max_treeInd())
+	writeSGF0(check, fout, 1);
+	if (count(check) != nnode() - 1)
 		error("writeSGF() nodes number does not match!");
 
 	fout << ")\n";
@@ -833,7 +858,7 @@ inline void Tree::writeSGF(const string &name)
 // return max node index written
 // nodes should be written in the order of treeIndex
 // recursively write the tree
-inline void Tree::writeSGF0(vector<Long> &treeInds_written, ofstream &fout, Long_I treeInd)
+inline void Tree::writeSGF0(VecBool &check, ofstream &fout, Long_I treeInd)
 {
 	using slisc::lookupInt;
 	Int i, nnext;
@@ -841,7 +866,7 @@ inline void Tree::writeSGF0(vector<Long> &treeInds_written, ofstream &fout, Long
 
 	// write one node
 	writeSGF01(fout, treeInd1);
-	treeInds_written.push_back(treeInd1);
+	check[treeInd1] = true;
 
 	// go down the branch if no fork
 	for (i = 0; i < 10000; ++i) {
@@ -855,15 +880,13 @@ inline void Tree::writeSGF0(vector<Long> &treeInds_written, ofstream &fout, Long
 				writeSGF0_link(fout, treeInd1, 0, "ko>");
 				return; // ko link
 			}
-			if (treeInd2 < treeInd1) { // reached a link to an existing node
+			if (check[treeInd2]) { // reached a link to an existing node
 				writeSGF0_link(fout, treeInd1, 0, ">"); // write a node to represent a link
 				return;
 			}
-			if (treeInd2 != treeInd1 + 1)
-				error("unknown!");
 			treeInd1 = treeInd2;
 			writeSGF01(fout, treeInd1);
-			treeInds_written.push_back(treeInd1);
+			check[treeInd1] = true;
 		}
 		else if (nnext == 0)
 			return;
@@ -881,14 +904,14 @@ inline void Tree::writeSGF0(vector<Long> &treeInds_written, ofstream &fout, Long
 		if (is_next_ko_link(treeInd1, i)) {
 			writeSGF0_link(fout, treeInd1, i, "ko>"); // write a node to represent a link
 		}
-		else if (findInt(dummy, treeInds_written, treeInd2) == 0) { // reached a link to an existing node
+		else if (check[treeInd2]) { // reached a link to an existing node
 			writeSGF0_link(fout, treeInd1, i, ">"); // write a node to represent a link
 		}
 		else
-			writeSGF0(fout, treeInd2); // normal node
+			writeSGF0(check, fout, treeInd2); // normal node
 		fout << ')';
 	}
-	return max_treeInd;
+	return;
 }
 
 // write one node to SGF file
@@ -1065,9 +1088,9 @@ inline Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 		else if (ret == 0)
 			return 0; // new node created
 		else if (ret == 1)
-			return 1;  // linked to an existing node, no Ko
+			return 1;  // linked to an existing normal node or clean ko node
 		else if (ret == -2)
-			return 2; // linked to existing node, has Ko
+			return 2; // ko link created
 		else if (ret == 2)
 			return 4; // linked to a non-clean ko node
 	}
@@ -1083,10 +1106,14 @@ inline Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 			return -3; // double pass not allowed
 		}
 		else if (ret == 1) {
-			return 1; // linked to existing node
+			return 1; // linked to existing normal node or clean ko node
 		}
 		else if (ret == 2) {
-			return 2; // linked to existing node, has Ko
+			return 2; // ko link created
+		}
+		else if (ret == 3) {
+			// linked to an(unclean) ko node
+			return 4;
 		}
 		else
 			error("unhandled case!");
@@ -1159,7 +1186,7 @@ inline void Tree::solve_end(Long_I treeInd)
 
 Int Tree::solve(Long_I treeInd /*optional*/)
 {
-	Bool debug_stop = nnode() >= 136; // nnode() >= 2492 || treeInd1 == 1; // debug
+	Bool debug_stop = nnode() >= 314; // nnode() >= 2492 || treeInd1 == 1; // debug
 	Bool save = false;
 	Int i, move_ret, solve_ret, solve_ko_ret, child_treeInd;
 	const Long treeInd1 = def(treeInd);
@@ -1185,7 +1212,7 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 
 	// enumerate children
 	for (i = 0; i < 100000; ++i) {
-		debug_stop = nnode() >= 136;
+		debug_stop = nnode() >= 314;
 		//###########################################################
 		move_ret = rand_smart_move(treeInd1);
 		//###########################################################
@@ -1281,15 +1308,19 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 			} // end debug
 			// break the link first
 			child_treeInd = next(treeInd1, -1);
-			Move mov = unlink(treeInd1, -1);
-			solve_ko_ret = solve_ko(child_treeInd);
+			solve_ko_ret = solve_ko(treeInd1, -1);
 
 			if (solve_ko_ret == 0 || solve_ko_ret == 1) {
 				// 0: solved to solvable node
 				// 1: solved to clean ko node and pushed
-				link(treeInd1, mov, child_treeInd); // re-link the ko node
-				child_sco2 = clean_ko_node_sco2(child_treeInd);
-				child_sol = clean_ko_node_sol(child_treeInd);
+				if (solve_ko_ret == 0) {
+					child_sco2 = score2(child_treeInd);
+					child_sol = solution(child_treeInd);
+				}
+				else {
+					child_sco2 = clean_ko_node_sco2(child_treeInd);
+					child_sol = clean_ko_node_sol(child_treeInd);
+				}
 				if (best_solvable_child_sco2 < child_sco2) {
 					best_solvable_child_sco2 = child_sco2;
 					best_solvable_child_sol = child_sol;
@@ -1302,6 +1333,9 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 				}
 				continue;
 			}
+			else if (solve_ko_ret == 2) {
+				error("clean ko node should have catched by ");
+			}
 			else {
 				error("unhandled case!");
 			}
@@ -1309,10 +1343,31 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 		else if (move_ret == 2 || move_ret == -3) {
 			// a ko link created
 			Long child_treeInd = next(treeInd1, -1);
-			m_ko_link_from.push_back(treeInd1);
-			m_ko_link_to.push_back(child_treeInd);
-			has_ko_link = true;
-			continue;
+			if (solved(child_treeInd)) {
+				// ko link target already solved
+				child_sco2 = score2(child_treeInd);
+				child_sol = solution(child_treeInd);
+				if (best_solvable_child_sco2 < child_sco2) {
+					best_solvable_child_sco2 = child_sco2;
+					best_solvable_child_sol = child_sol;
+					if (best_solvable_child_sol == Sol::GOOD) {
+						set_solution(Sol::BAD, treeInd1);
+						set_score2(inv_score2(best_solvable_child_sco2), treeInd1);
+						resolve_ko(treeInd1);
+						return 0; // debug break point
+					}
+				}
+				continue;
+			}
+			else if (solution(child_treeInd) == Sol::UNKNOWN) {
+				// ko link target not solved
+				m_ko_link_from.push_back(treeInd1);
+				m_ko_link_to.push_back(child_treeInd);
+				has_ko_link = true;
+				continue;
+			}
+			else
+				error("unhandled case!");
 		}
 		else if (move_ret == -1) {
 			// all children exist
@@ -1340,7 +1395,7 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 				// has ko link, no ko child
 				if (best_solvable_child_sco2 < 0) {
 					// forbidden node
-					set_solution(Sol::FORBIDDEN, treeInd);
+					set_solution(Sol::FORBIDDEN, treeInd1);
 					return 3;
 				}
 				set_score2(inv_score2(best_solvable_child_sco2), treeInd1);
@@ -1389,64 +1444,63 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 	error("unkown error!"); return -1;
 }
 
-inline Int Tree::solve_ko(Long_I treeInd)
+inline Int Tree::solve_ko(Long_I treeInd_from, Int_I forkInd)
 {
 	Int i, ret;
-	Long treeInd1 = def(treeInd);
+	Long treeInd_to = next(treeInd_from, forkInd);
 	if (m_ko_link_from.size() != 0) {
 		// not all ko links resolved
 		error("unhandled case!");
 	}
 
 	// check clean ko node
-	if (check_clean_ko_node(treeInd1) >= 0) {
+	if (check_clean_ko_node(treeInd_to) >= 0) {
 		// is a clean ko nod
-		return 0;
+		return 2;
 	}
 
 	// shift ko links to curren node
-	shift_ko_links(treeInd1);
+	shift_ko_links(treeInd_from, forkInd);
 
 	// Now we can start solving!
-	ret = solve_ko0(treeInd1);
+	ret = solve_ko0(treeInd_to);
 	return ret;
 }
 
-// this function is similar to solve()
-// return 0 if solved
-// return 1 if is still a ko node
 Int Tree::solve_ko0(Long_I treeInd1)
 {
 	Int i, solve_ret, move_ret;
-	Node & node = Tree::node(treeInd1);
-	Int child_treeInd, child_sco2, Nchild = node.nnext();
-	Int best_solvable_child_sco2, best_ko_child_sco2;
+	Int child_treeInd, child_sco2, Nchild = node(treeInd1).nnext();
+	Int best_solvable_child_sco2 = -1, best_ko_child_sco2 = -1;
 	Sol child_sol;
-	Sol best_solvable_child_sol, best_ko_child_sol;
-	Bool has_ko_link = false, has_ko_child = false;
+	Sol best_solvable_child_sol = Sol::BAD, best_ko_child_sol = Sol::BAD;
+	Bool has_ko_link = false, has_ko_child = false, save = false;
 
 	// check existing children
 	for (i = 0; i < Nchild; ++i) {
-		child_treeInd = node.next(i);
+		child_treeInd = node(treeInd1).next(i);
 		if (is_ko_child(treeInd1, i)) {
 			// found a ko child
 			has_ko_child = true;
 			solve_ret = solve_ko0(child_treeInd);
-			if (solve_ret = 0) {
+			if (solve_ret == 0) {
 				// ko child is solved
 				child_sco2 = score2(child_treeInd);
 				child_sol = solution(child_treeInd);
 				if (best_solvable_child_sco2 < child_sco2) {
 					best_solvable_child_sco2 = child_sco2;
+					best_solvable_child_sol = child_sol;
 					if (child_sol == Sol::GOOD) {
 						set_solution(Sol::BAD, treeInd1);
 						set_score2(inv_score2(best_solvable_child_sco2), treeInd1);
+						rm_clean_ko_node(treeInd1);
 						return 0;
 					}
 				}
+				continue;
 			}
 		}
-		else if (node.is_next_ko_link(i)) {
+		else if (node(treeInd1).is_next_ko_link(i)) {
 			// found a ko link
 			m_ko_link_from.push_back(treeInd1);
 			m_ko_link_to.push_back(child_treeInd);
@@ -1459,9 +1513,11 @@ Int Tree::solve_ko0(Long_I treeInd1)
 			child_sol = solution(child_treeInd);
 			if (best_solvable_child_sco2 < child_sco2) {
 				best_solvable_child_sco2 = child_sco2;
+				best_solvable_child_sol = child_sol;
 				if (child_sol == Sol::GOOD) {
 					set_solution(Sol::BAD, treeInd1);
 					set_score2(inv_score2(best_solvable_child_sco2), treeInd1);
+					rm_clean_ko_node(treeInd1);
 					return 0;
 				}
 			}
@@ -1473,6 +1529,10 @@ Int Tree::solve_ko0(Long_I treeInd1)
 			// not all children checked
 			// try to create other children
 			move_ret = rand_smart_move(treeInd1);
+			if (save) { // debug
+				writeSGF("test.sgf");
+				save = false;
+			} // end debug
 			if (move_ret == 0 || move_ret == 1) {
 				// 0: successful and new node created
 				// 1: linked to existing node and no ko
@@ -1483,35 +1543,131 @@ Int Tree::solve_ko0(Long_I treeInd1)
 				// end debug
 				child_treeInd = next(treeInd1, -1);
 				solve_ret = solve(child_treeInd);
+				if (save) { // debug
+					writeSGF("test.sgf");
+					save = false;
+				} // end debug
 				if (solve_ret == 0) {
 					child_sco2 = score2(child_treeInd);
 					child_sol = solution(child_treeInd);
 					if (best_solvable_child_sco2 < child_sco2) {
 						best_solvable_child_sco2 = child_sco2;
+						best_solvable_child_sol = child_sol;
 						if (child_sol == Sol::GOOD) {
 							set_solution(Sol::BAD, treeInd1);
 							set_score2(inv_score2(best_solvable_child_sco2), treeInd1);
+							rm_clean_ko_node(treeInd1);
 							return 0;
 						}
 					}
+					continue;
 				}
 				else {
 					error("unhandled case");
 				}
 			}
-			else if (move_ret == 2) {
-				// linked to existing node and has ko
-				error("unhandled case!");
+			else if (move_ret == 2 || move_ret == -3) {
+				// 2: linked to existing node and has ko
+				// -3: double pass not allowed and ko link created
+				// a ko link created
+				Long child_treeInd = next(treeInd1, -1);
+				if (solved(child_treeInd)) {
+					// ko link target already solved
+					child_sco2 = score2(child_treeInd);
+					child_sol = solution(child_treeInd);
+					if (best_solvable_child_sco2 < child_sco2) {
+						best_solvable_child_sco2 = child_sco2;
+						best_solvable_child_sol = child_sol;
+						if (best_solvable_child_sol == Sol::GOOD) {
+							set_solution(Sol::BAD, treeInd1);
+							set_score2(inv_score2(best_solvable_child_sco2), treeInd1);
+							resolve_ko(treeInd1);
+							rm_clean_ko_node(treeInd1);
+							return 0; // debug break point
+						}
+					}
+					continue;
+				}
+				else if (solution(child_treeInd) == Sol::UNKNOWN) {
+					// ko link target not solved
+					m_ko_link_from.push_back(treeInd1);
+					m_ko_link_to.push_back(child_treeInd);
+					has_ko_link = true;
+					continue;
+				}
+				else
+					error("unhandled case!");
 			}
 			else if (move_ret == -2) {
 				// passed and game ends
-			}
-			else if (move_ret == -3) {
-				// return -3 if double pass not allowed and ko link created
+				error("unhandled case!");
 			}
 			else if (move_ret == -1) {
-				// all legal moves already exists
-				break;
+				// all children exist
+				// no good child or good ko child is found
+				if (!has_ko_link && !has_ko_child) {
+					if (best_solvable_child_sco2 < 0) {
+						// all children are forbidden
+						set_solution(Sol::FORBIDDEN, treeInd1);
+						return 3;
+					}
+					// all children solved
+					if (best_solvable_child_sol == Sol::FAIR) {
+						set_solution(Sol::FAIR, treeInd1);
+						set_score2(inv_score2(best_solvable_child_sco2), treeInd1);
+					}
+					else { // best == Sol::BAD
+						set_solution(Sol::GOOD, treeInd1);
+						set_score2(inv_score2(best_solvable_child_sco2), treeInd1);
+					}
+					resolve_ko(treeInd1);
+					rm_clean_ko_node(treeInd1);
+					return 0; // debug break point
+				}
+				// not all children solvable
+				else if (has_ko_link && !has_ko_child) {
+					// has ko link, no ko child
+					if (best_solvable_child_sco2 < 0) {
+						// forbidden node
+						set_solution(Sol::FORBIDDEN, treeInd1);
+						return 3;
+					}
+					set_score2(inv_score2(best_solvable_child_sco2), treeInd1);
+					calc_ko_sol(treeInd1);
+					return -1;
+				}
+				else if (!has_ko_link && has_ko_child) {
+					// has ko child, no ko link
+					if (best_solvable_child_sco2 >= best_ko_child_sco2) {
+						// trivial ko
+						set_score2(inv_score2(best_solvable_child_sco2), treeInd1);
+						calc_sol(treeInd1);
+						resolve_ko(treeInd1);
+						rm_clean_ko_node(treeInd1);
+						return 0;
+					}
+					else {
+						// this is a ko node
+						set_score2(inv_score2(best_ko_child_sco2), treeInd1);
+						calc_ko_sol(treeInd1);
+						if (resolve_ko(treeInd1)) {
+							// still have unresolved ko link
+							return -1;
+						}
+						else {
+							// all downstream ko resolved !
+							push_clean_ko_node(treeInd1);
+							return 2; // debug break point
+						}
+					}
+				}
+				else { // (has_ko_link && has_ko_child)
+					   // has both ko child and ko link
+					set_score2(inv_score2(MAX(best_solvable_child_sco2, best_ko_child_sco2)), treeInd1);
+					calc_ko_sol(treeInd1);
+					resolve_ko(treeInd1);
+					return -1;
+				}
 			}
 		}
 	}
@@ -1520,10 +1676,26 @@ Int Tree::solve_ko0(Long_I treeInd1)
 	// all children exist
 	// no good child or good ko child is found
 	if (!has_ko_link && !has_ko_child) {
-		error("impossible case!");
+		if (best_solvable_child_sco2 < 0) {
+			// all children are forbidden
+			set_solution(Sol::FORBIDDEN, treeInd1);
+			return 3;
+		}
+		// all children solved
+		if (best_solvable_child_sol == Sol::FAIR) {
+			set_solution(Sol::FAIR, treeInd1);
+			set_score2(inv_score2(best_solvable_child_sco2), treeInd1);
+		}
+		else { // best == Sol::BAD
+			set_solution(Sol::GOOD, treeInd1);
+			set_score2(inv_score2(best_solvable_child_sco2), treeInd1);
+		}
+		resolve_ko(treeInd1);
+		rm_clean_ko_node(treeInd1);
+		return 0; // debug break point
 	}
 	// not all children solvable
-	else if (has_ko_link && !has_ko_child) {
+	if (has_ko_link && !has_ko_child) {
 		// has ko link, no ko child
 		if (best_solvable_child_sco2 < 0) {
 			error("impossible case!");
@@ -1539,6 +1711,7 @@ Int Tree::solve_ko0(Long_I treeInd1)
 			set_score2(inv_score2(best_solvable_child_sco2), treeInd1);
 			calc_sol(treeInd1);
 			resolve_ko(treeInd1);
+			rm_clean_ko_node(treeInd1);
 			return 0;
 		}
 		else {
