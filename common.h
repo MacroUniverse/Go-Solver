@@ -69,6 +69,21 @@ inline Int sol2int(Sol_I sol)
 	error("illegal sol!");
 }
 
+inline std::ostream & operator<<(std::ostream &ostream, Sol sol)
+{
+	if (sol == Sol::GOOD) {
+		return ostream << "good";
+	}
+	else if (sol == Sol::BAD) {
+		return ostream << "bad";
+	}
+	else if (sol == Sol::FAIR) {
+		return ostream << "fiar";
+	}
+	else
+		error("unhandled case!");
+}
+
 inline Int operator-(Sol_I sol1, Sol_I sol2)
 {
 	return sol2int(sol1) - sol2int(sol2);

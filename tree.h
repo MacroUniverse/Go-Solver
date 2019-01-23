@@ -3,6 +3,7 @@
 #include "pool.h"
 #include "boardref.h"
 #include "SLISC/search.h"
+#include "SLISC/input.h"
 
 // game tree
 // a tree index is an index for m_nodes (treeInd), this index should never change for the same node
@@ -146,6 +147,12 @@ public:
 	// return 3 if linked to an (unclean) ko node
 	inline Int pass(Long_I treeInd = -1);
 
+	// check if a placing is legal, or how many stones will be dead
+	// same check already exists for place()
+	// Ko is not considered!
+	// if legal, return the number of stones that can be removed ( >= 0)
+	// return -1 if occupied, do nothing
+	// return -2 if no qi, do nothing
 	inline Int check(Char_I x, Char_I y, Long_I treeInd = -1);
 
 	// return 0 if new node created (m_treeInd jumped)
@@ -224,6 +231,10 @@ public:
 	// return -2 if passed and game ends
 	// return -3 if double pass not allowed and ko link created
 	inline Int rand_smart_move(Long_I treeInd = -1);
+
+	// prompt user for a move
+	// returns are the same as auto_smart_move()
+	inline Int prompt_move(Long_I treeInd = -1);
 
 	// randomly play to the end of the game from a node
 	// m_treeInd will be changed to the end node!
@@ -638,12 +649,6 @@ inline Int Tree::pass(Long_I treeInd /*optional*/)
 	return 0;
 }
 
-// check if a placing is legal, or how many stones will be dead
-// same check already exists for place()
-// Ko is not considered!
-// if legal, return the number of stones that can be removed ( >= 0)
-// return -1 if occupied, do nothing
-// return -2 if no qi, do nothing
 inline Int Tree::check(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 {
 	Int ret;
@@ -1029,6 +1034,93 @@ Int Tree::rand_move(Long_I treeInd /*optional*/)
 	error("update this function from rand_smart_move()");
 }
 
+inline Int Tree::prompt_move(Long_I treeInd)
+{
+	Int i, ret;
+	Int x, y;
+	Long treeInd1 = def(treeInd);
+
+	// display board
+	cout << "current tree index : " << treeInd1 << endl;
+	disp_board(treeInd1);
+
+	for (i = 0; i < 1000; ++i) {
+		inpUint2(x, y, "input x y (negative to pass)");
+		if (x < 0 || y < 0) {
+			if (next_exist(Move(Act::PASS), treeInd1)) {
+				if (inpBool("move exists, does all moves exist?")) {
+					return -1;
+				}
+				cout << "try again!" << endl;
+				continue;
+			}
+			ret = pass(treeInd1);
+
+			if (ret == -1)
+				return -2; // double pass successful
+			else if (ret == 0)
+				return 0; // first pass
+			else if (ret == -2) {
+				return -3; // double pass not allowed
+			}
+			else if (ret == 1) {
+				return 1; // linked to existing normal node or clean ko node
+			}
+			else if (ret == 2) {
+				return 2; // ko link created
+			}
+			else if (ret == 3) {
+				// linked to an(unclean) ko node
+				return 4;
+			}
+			else
+				error("unhandled case!");
+			}
+		else {
+			// make a move
+			BoardRef board = get_board(treeInd1);
+			// check existence
+			if (next_exist(Move(x, y), treeInd1)) {
+				if (inpBool("move exists, does all moves exist?")) {
+					return -1;
+				}
+				cout << "try again!" << endl;
+				continue;
+			}
+			// check legal and number of removal
+			ret = check(x, y, treeInd1);
+			if (ret < 0)
+				cout << "illegal move, try again!" << endl;
+			// check dumb eye filling
+			if (board.is_dumb_eye_filling(x, y, ::next(who(treeInd1)))) {
+				cout << "dumb eye filling, try again!" << endl;
+			}
+			if (board.is_dumb_2eye_filling(x, y, ::next(who(treeInd1)))) {
+				cout << "dumb 2-eye filling, try again!" << endl;
+			}			
+			
+			ret = place(x, y, treeInd1);
+
+			if (ret == -1) {
+				cout << "illegal move, try again!" << endl; // illegal move, no change
+				continue;
+			}
+			else if (ret == 0)
+				return 0; // new node created
+			else if (ret == 1)
+				return 1; // linked to a normal node, or clean ko node
+			else if (ret == 2)
+				return 4; // linked to a non-clean ko node
+			else if (ret == -2) {
+				cout << "ko, try again!" << endl; // linked to existing node, has ko
+				continue;
+			}
+		}
+	}
+	error("should not reach here");
+	return -100;
+}
+
 inline Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 {
 	Bool exist, exist_pass = false;
@@ -1186,8 +1278,10 @@ inline void Tree::solve_end(Long_I treeInd)
 
 Int Tree::solve(Long_I treeInd /*optional*/)
 {
+	using slisc::inpBool; using slisc::inpUint2;
 	Bool debug_stop = nnode() >= 314; // nnode() >= 2492 || treeInd1 == 1; // debug
 	Bool save = false;
+	static Bool auto_solve = false;
 	Int i, move_ret, solve_ret, solve_ko_ret, child_treeInd;
 	const Long treeInd1 = def(treeInd);
 	Int child_sco2;
@@ -1198,6 +1292,7 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 	Int best_solvable_child_sco2 = -1;
 	Sol best_solvable_child_sol = Sol::BAD;
 	Int best_ko_child_sco2 = -1;
+	static Long auto_solve_treeInd = 1000000;
 
 	// if already solved
 	if (solution(treeInd1) != Sol::UNKNOWN) {
@@ -1213,9 +1308,34 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 	// enumerate children
 	for (i = 0; i < 100000; ++i) {
 		debug_stop = nnode() >= 314;
-		//###########################################################
-		move_ret = rand_smart_move(treeInd1);
-		//###########################################################
+
+		// prompt_move() or rand_smart_move
+		if (treeInd1 >= auto_solve_treeInd) {
+			move_ret = rand_smart_move(treeInd1);
+		}
+		else {
+			if (auto_solve) {
+				// auto solve successful!
+				cout << "node " << auto_solve_treeInd << " solution : " << solution(auto_solve_treeInd) << "\n" << endl;
+				writeSGF("test.sgf");
+				cout << "current tree ind : " << treeInd1 << endl;
+				disp_board(treeInd1);
+				auto_solve_treeInd = 1000000;
+			}
+			cout << "current tree index : " << treeInd1 << endl;
+			disp_board(treeInd1);
+
+			Char y_n;
+
+			auto_solve = inpBool("auto solve this node?");
+
+			if (auto_solve) {
+				auto_solve_treeInd = treeInd1;
+				move_ret = rand_smart_move(treeInd1);
+			}
+			else
+				move_ret = prompt_move(treeInd1);
+		}
 
 		if (save) { // debug
 			writeSGF("test.sgf");

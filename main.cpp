@@ -12,9 +12,9 @@ int main()
 	Tree tree;
 
 	// debug: edit board here
-	tree.place(1, 1);
+	// tree.place(1, 1);
 	// end edit board
 
-	tree.solve(1);
+	tree.solve(0);
 	tree.writeSGF("test.sgf");
 }
