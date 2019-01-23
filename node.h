@@ -53,13 +53,6 @@ public:
 	}
 	Int nlast() const { return m_last.size(); }
 
-	Bool is_last_ko_link(Int_I ind) const
-	{
-		if (m_last[ind] < 0)
-			return true;
-		return false;
-	}
-
 	Long last(Int_I forkInd) const
 	{
 		Long ret = m_last[forkInd];
@@ -157,6 +150,18 @@ public:
 			error("not a normal link!");
 #endif
 		m_next[forkInd] = -next(forkInd) - 1;
+	}
+
+	// remove one element from m_last
+	void delete_last(Int_I forkInd)
+	{
+		m_last.erase(m_last.begin() + forkInd);
+	}
+
+	// remove one element from m_next
+	void delete_next(Int_I forkInd)
+	{
+		m_next.erase(m_next.begin() + forkInd);
 	}
 
 	~Node() {}
