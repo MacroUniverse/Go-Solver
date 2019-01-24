@@ -170,7 +170,7 @@ public:
 	inline Int islinked(Long_I treeInd1, Long_I treeInd2); // check if node treeInd1 can lead to node treeInd2
 
 														   // check if same board already exists in the Pool and decide if it is a Ko
-	inline Int check_ko(Int_O &search_ret, Long_O &treeInd_match, Long_O &orderInd, Long_I treeInd, Config_I &config, Bool_I flip);
+	inline Int check_ko(Int_O search_ret, Long_O treeInd_match, Long_O orderInd, Long_I treeInd, Config_I config, Bool_I flip);
 
 	Node & nextNode(Long_I treeInd = -1, Int_I forkInd = 0) // return a reference of the next node of a node
 	{
@@ -489,7 +489,7 @@ public:
 
 	// internal recursive function called by shift_ko_links()
 	// treeInd1 is the node in shift_ko_links
-	void shift_ko_links0(Long_I &treeInd1, Long_I treeInd)
+	void shift_ko_links0(Long_I treeInd1, Long_I treeInd)
 	{
 		Int i;
 		Long ko_treeInd;
@@ -765,8 +765,8 @@ inline Int Tree::islinked(Long_I treeInd1, Long_I treeInd2)
 // return -1 if situation exists but not a ko
 // return -2 if situation exists and is a ko
 // return -3 if this is a new situation of an existing configuration
-inline Int Tree::check_ko(Int_O &search_ret, Long_O &treeInd_match, Long_O &orderInd,
-	Long_I treeInd, Config_I &config, Bool_I flip)
+inline Int Tree::check_ko(Int_O search_ret, Long_O treeInd_match, Long_O orderInd,
+	Long_I treeInd, Config_I config, Bool_I flip)
 {
 	Long poolInd;
 	search_ret = m_pool.search(poolInd, orderInd, config);

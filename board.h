@@ -2,12 +2,6 @@
 #include "config.h"
 #include "boardref.h"
 
-class Board;
-typedef const Board Board_I;
-typedef Board Board_O, Board_IO;
-
-class BoardRef;
-
 // config with transformation information
 class Board
 {
@@ -121,7 +115,7 @@ public:
 	}
 
 	// move internal data from one board to another without copying
-	void operator<<(Board_IO &rhs)
+	void operator<<(Board_IO rhs)
 	{
 		m_config << rhs.m_config;
 		m_trans = rhs.m_trans;

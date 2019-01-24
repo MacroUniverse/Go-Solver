@@ -20,15 +20,45 @@ using std::vector; using std::string;
 using std::ofstream; using std::cout;
 using std::cin; using std::endl;
 
-enum class Who : Char { NONE, WHITE, BLACK, DEFAULT, DRAW }; // TODO: make this a char type
-typedef const Who Who_I;
-typedef Who Who_IO, Who_O;
+class Trans;
+typedef const Trans &Trans_I;
+typedef Trans &Trans_O, &Trans_IO;
 
-enum class Act : Char { PLACE, PASS, EDIT, INIT }; // TODO: make this a char type
-typedef const Act Act_I;
+enum class Who : Char { NONE, WHITE, BLACK, DEFAULT, DRAW };
+typedef const Who &Who_I;
+typedef Who &Who_IO, &Who_O;
+
+enum class Act : Char { PLACE, PASS, EDIT, INIT };
+typedef const Act &Act_I;
+typedef Act &Act_O, &Act_IO;
 
 enum class Sol : Char { BAD, FAIR, GOOD, UNKNOWN, KO_GOOD, KO_BAD, KO_FAIR, FORBIDDEN};
-typedef const Sol Sol_I;
+typedef const Sol &Sol_I;
+typedef Sol &Sol_O, &Sol_IO;
+
+class Move;
+typedef const Move &Move_I;
+typedef Move &Move_O, &Move_IO;
+
+class Node;
+typedef const Node &Node_I;
+typedef Node &Node_O, &Node_IO;
+
+class Group;
+typedef const Group &Group_I;
+typedef Group &Group_O, &Group_IO;
+
+class Config;
+typedef const Config &Config_I;
+typedef Config &Config_O, &Config_IO;
+
+class Board;
+typedef const Board & Board_I;
+typedef Board &Board_O, &Board_IO;
+
+class BoardRef;
+typedef const BoardRef &BoardRef_I;
+typedef BoardRef &BoardRef_O, &BoardRef_IO;
 
 inline Bool is_ko_sol(Sol_I sol)
 {
@@ -193,9 +223,6 @@ public:
 	void set_flip(Bool_I flip) { m_flip = flip; }
 };
 
-typedef Trans Trans_O, Trans_IO;
-typedef const Trans Trans_I;
-
 // get inverse transform
 inline Trans inv(Trans_I trans)
 {
@@ -206,7 +233,7 @@ inline Trans inv(Trans_I trans)
 }
 
 // transform coordinates
-inline void transf(Char_IO &x, Char_IO &y, Int_I rot)
+inline void transf(Char_IO x, Char_IO y, Int_I rot)
 {
 	Char temp, xmax = board_Nx() - 1, ymax = board_Ny() - 1;
 	if (rot == 1) {
@@ -221,7 +248,7 @@ inline void transf(Char_IO &x, Char_IO &y, Int_I rot)
 }
 
 // transform coordinates and who
-inline void transf(Char_IO &x, Char_IO &y, Who_O &who, Trans trans)
+inline void transf(Char_IO x, Char_IO y, Who_O who, Trans trans)
 {
 	Char temp, xmax = board_Nx() - 1, ymax = board_Ny() - 1;
 	if (trans.rot() == 1) {
@@ -238,7 +265,7 @@ inline void transf(Char_IO &x, Char_IO &y, Who_O &who, Trans trans)
 }
 
 // inverse transform coordinates
-inline void inv_transf(Char_IO &x, Char_IO &y, Int_I rot)
+inline void inv_transf(Char_IO x, Char_IO y, Int_I rot)
 {
 	Char temp, xmax = board_Nx() - 1, ymax = board_Ny() - 1;
 	if (rot == 1) {
@@ -253,7 +280,7 @@ inline void inv_transf(Char_IO &x, Char_IO &y, Int_I rot)
 }
 
 // inverse transform coordinates and who
-inline void inv_transf(Char_IO &x, Char_IO &y, Who_O &who, Trans trans)
+inline void inv_transf(Char_IO x, Char_IO y, Who_O who, Trans trans)
 {
 	Char temp, xmax = board_Nx() - 1, ymax = board_Ny() - 1;
 	if (trans.rot() == 1) {
@@ -270,16 +297,15 @@ inline void inv_transf(Char_IO &x, Char_IO &y, Who_O &who, Trans trans)
 }
 
 // calculate trans1 += trans2
-inline void operator+=(Trans_IO &trans1, Trans_I trans2)
+inline void operator+=(Trans_IO trans1, Trans_I trans2)
 {
 	trans1.set_rot((trans1.rot() + trans2.rot()) % 4);
 	if (trans2.flip())
 		trans1.set_flip(!trans1.flip());
 }
 
-
 // calculate trans1 -= trans2
-inline void operator-=(Trans_IO &trans1, Trans_I trans2)
+inline void operator-=(Trans_IO trans1, Trans_I trans2)
 {
 	trans1.set_rot(mod(trans1.rot() - trans2.rot(), 4));
 	if (trans2.flip())

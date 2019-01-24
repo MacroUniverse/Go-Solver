@@ -2,10 +2,6 @@
 #include "group.h"
 #include "SLISC/sort.h"
 
-class Config;
-typedef Config Config_O, Config_IO;
-typedef const Config Config_I;
-
 // board configuration, not situation
 // for raw board, class RawBoard must be used
 // origin at upper left corner, x axis points right, y axis points down
@@ -44,18 +40,18 @@ public:
 	// if (x,y) already have a stone, "who" argument is not used
 	// "mark" will mark connected stones and their qi.
 	// "group" has the coordinates of the connected stones
-	void connect(MatChar_O & mark, vector<Move> &qi, vector<Move> /*_O*/ &group,
+	void connect(MatChar_O mark, vector<Move> &qi, vector<Move> /*_O*/ &group,
 		Char_I x, Char_I y, Who_I who = Who::DEFAULT) const;
 
 	// internal recursive function called by connect()
-	void connect0(MatChar_IO & mark, vector<Move> &qi, vector<Move> /*_IO*/ &group,
+	void connect0(MatChar_IO mark, vector<Move> &qi, vector<Move> /*_IO*/ &group,
 		Char_I x, Char_I y, Who_I who = Who::DEFAULT) const;
 
 	// get all qi's connected to one qi
-	void connect_qi(MatChar_O & mark, vector<Move> /*_O*/ &group, Char_I x, Char_I y) const;
+	void connect_qi(MatChar_O mark, vector<Move> /*_O*/ &group, Char_I x, Char_I y) const;
 
 	// internal recursive function called by connect_qi()
-	void connect_qi0(MatChar_IO & mark, vector<Move> /*_IO*/ &group, Char_I x, Char_I y) const;
+	void connect_qi0(MatChar_IO mark, vector<Move> /*_IO*/ &group, Char_I x, Char_I y) const;
 
 	// remove a group of stone from the board
 	void remove_group(const vector<Move> &group);
@@ -158,14 +154,14 @@ public:
 	Who transform1(Char_I x, Char_I y, Trans_I trans) const;
 
 	// transform the board to a new board
-	void transform(Config_O &board, Trans_I trans) const;
+	void transform(Config_O board, Trans_I trans) const;
 
 	// === none-const functions ===
 
 	void init(); // init to an empty board
 
 	// move internal data from one config to another without copying
-	void operator<<(Config_IO &rhs);
+	void operator<<(Config_IO rhs);
 
 	// transform a board itself
 	void transform(Trans_I trans);
@@ -184,7 +180,7 @@ public:
 // return 0: board == board_raw
 // return -1: board < board_raw
 // transformation will be performed on "board_raw", but not "board"
-inline Int operator-(Config_I &config1, Config_I &config2);
+inline Int operator-(Config_I config1, Config_I config2);
 
 // === implementation ===
 
@@ -313,7 +309,7 @@ inline Who Config::transform1(Char_I x, Char_I y, Trans_I trans) const
 	return stone;
 }
 
-void Config::transform(Config_O &config, Trans_I trans) const
+void Config::transform(Config_O config, Trans_I trans) const
 {
 	Char Nx = board_Nx(), Ny = board_Ny(), x, y;
 	config.init();
@@ -449,12 +445,12 @@ inline Int Config::place(Char_I x, Char_I y, Who_I who)
 	return 0;
 }
 
-void Config::operator<<(Config_IO &rhs)
+void Config::operator<<(Config_IO rhs)
 {
 	m_data << rhs.m_data;
 }
 
-inline void Config::connect(MatChar_O &mark, vector<Move> &qi, vector<Move> /*_O*/ &group,
+inline void Config::connect(MatChar_O mark, vector<Move> &qi, vector<Move> /*_O*/ &group,
 	Char_I x, Char_I y, Who_I who_assume /*optional*/) const
 {
 	// init output
@@ -463,7 +459,7 @@ inline void Config::connect(MatChar_O &mark, vector<Move> &qi, vector<Move> /*_O
 	connect0(mark, qi, group, x, y, who_assume);
 }
 
-inline void Config::connect0(MatChar_IO &mark, vector<Move> &qi, vector<Move> /*_IO*/ &group,
+inline void Config::connect0(MatChar_IO mark, vector<Move> &qi, vector<Move> /*_IO*/ &group,
 	Char_I x, Char_I y, Who_I who_assume) const
 {
 	Char Nx = board_Nx(), Ny = board_Ny();
@@ -521,7 +517,7 @@ inline void Config::connect0(MatChar_IO &mark, vector<Move> &qi, vector<Move> /*
 	}
 }
 
-void Config::connect_qi(MatChar_O & mark, vector<Move> /*_O*/ &group, Char_I x, Char_I y) const
+void Config::connect_qi(MatChar_O mark, vector<Move> /*_O*/ &group, Char_I x, Char_I y) const
 {
 	// init output
 	mark.resize(board_Nx(), board_Ny()); mark = Char(0); group.resize(0);
@@ -529,7 +525,7 @@ void Config::connect_qi(MatChar_O & mark, vector<Move> /*_O*/ &group, Char_I x, 
 	connect_qi0(mark, group, x, y);
 }
 
-void Config::connect_qi0(MatChar_IO & mark, vector<Move> /*_IO*/ &group, Char_I x, Char_I y) const
+void Config::connect_qi0(MatChar_IO mark, vector<Move> /*_IO*/ &group, Char_I x, Char_I y) const
 {
 	Char Nx = board_Nx(), Ny = board_Ny(), x1, y1;
 
@@ -825,7 +821,7 @@ inline Bool Config::is_dumb_2eye_filling(Char_I x, Char_I y, Who_I who) const
 	return true;
 }
 
-inline Int operator-(Config_I &config1, Config_I &config2)
+inline Int operator-(Config_I config1, Config_I config2)
 {
 	// rotation and inversion should make the board compare as big as possible
 	Char x, y;

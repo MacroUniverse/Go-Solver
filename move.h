@@ -1,10 +1,6 @@
 #pragma once
 #include "common.h"
 
-class Move;
-typedef const Move Move_I;
-typedef Move Move_O, Move_IO;
-
 // specify a move
 class Move
 {
@@ -147,7 +143,7 @@ inline Char & Move::y()
 	return m_y;
 }
 
-Bool operator==(Move_I &mov1, Move_I &mov2)
+Bool operator==(Move_I mov1, Move_I mov2)
 {
 	if (mov1.type() == mov2.type()) {
 		if (mov1.isplace()) {

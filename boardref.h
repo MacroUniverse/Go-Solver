@@ -2,8 +2,6 @@
 #include "config.h"
 #include "board.h"
 
-class Board;
-
 // constant reference type to board
 // has all const functions of Board
 // cannot be edited
@@ -15,7 +13,7 @@ private:
 
 public:
 	// === constructors ===
-	BoardRef(Config_I &config, Trans_I trans) : m_config(config), m_trans(trans) {}
+	BoardRef(Config_I config, Trans_I trans) : m_config(config), m_trans(trans) {}
 
 	// === const functions ===
 
@@ -112,8 +110,6 @@ public:
 		}
 	}
 };
-
-typedef const BoardRef BoardRef_I;
 
 inline void BoardRef::disp() const
 {

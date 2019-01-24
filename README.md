@@ -114,3 +114,5 @@ Other projects such as mini-go probably requires some training.
 * eat_pos() did not consider eating two groups at the same time
 * Ko child is equivalent to a normal child when calculating parent score. So there is no need to check other children when a ko child wins.
 * KO_ONLY should probably be split into KO_GOOD, KO_BAD, KO_FAIR.
+* bug: ko links are not resolved in time, downstream to upstream ko links should be resolved when a node is solved.
+* Even if human assistance is great, the program should be debuged in auto-solve mode.
