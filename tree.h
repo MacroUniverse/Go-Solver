@@ -19,8 +19,6 @@ private:
 	Pool m_pool;
 
 public:
-	Tree();
-
 	// global work space, TODO: should not be members
 	// keep track of all unresolved ko links
 	vector<Long> m_ko_link_to;
@@ -30,6 +28,12 @@ public:
 	vector<Long> m_clean_ko_node;
 	vector<Int> m_clean_ko_node_sco2;
 	vector<Sol> m_clean_ko_node_sol;
+
+	// input
+	slisc::Input inp;
+
+	// === constructors ===
+	Tree();
 
 	// === const functions ===
 
@@ -525,6 +529,7 @@ BoardRef Tree::get_board(Long_I treeInd) const
 // create 0-th node: empty board
 Tree::Tree() : m_treeInd(0)
 {
+	inp.openfile("inp.txt");
 	Board board; board.init();
 	m_pool.push(board, -3, 0, Who::NONE, 0);
 	m_nodes.push_back(Node()); m_nodes.back().init();
@@ -564,7 +569,7 @@ inline void Tree::disp_board(Long_I treeInd /*optional*/) const
 	for (i = 0; i < nlast(treeInd1); ++i) {
 		cout << i << ": ";
 		if (node.isinit())
-			cout << "(empty)";
+			cout << "(empty)" << endl;
 		else {
 			if (who(treeInd1) == Who::BLACK)
 				cout << "(black ";
@@ -1045,10 +1050,10 @@ inline Int Tree::prompt_move(Long_I treeInd)
 	disp_board(treeInd1);
 
 	for (i = 0; i < 1000; ++i) {
-		inpUint2(x, y, "input x y (negative to pass)");
+		inp.num2(x, y, "input x y (negative to pass)");
 		if (x < 0 || y < 0) {
 			if (next_exist(Move(Act::PASS), treeInd1)) {
-				if (inpBool("move exists, does all moves exist?")) {
+				if (inp.Bool("move exists, does all moves exist?")) {
 					return -1;
 				}
 				cout << "try again!" << endl;
@@ -1081,7 +1086,7 @@ inline Int Tree::prompt_move(Long_I treeInd)
 			BoardRef board = get_board(treeInd1);
 			// check existence
 			if (next_exist(Move(x, y), treeInd1)) {
-				if (inpBool("move exists, does all moves exist?")) {
+				if (inp.Bool("move exists, does all moves exist?")) {
 					return -1;
 				}
 				cout << "try again!" << endl;
@@ -1278,7 +1283,6 @@ inline void Tree::solve_end(Long_I treeInd)
 
 Int Tree::solve(Long_I treeInd /*optional*/)
 {
-	using slisc::inpBool; using slisc::inpUint2;
 	Bool debug_stop = nnode() >= 314; // nnode() >= 2492 || treeInd1 == 1; // debug
 	Bool save = false;
 	static Bool auto_solve = false;
@@ -1327,7 +1331,7 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 
 			Char y_n;
 
-			auto_solve = inpBool("auto solve this node?");
+			auto_solve = inp.Bool("auto solve this node?");
 
 			if (auto_solve) {
 				auto_solve_treeInd = treeInd1;
