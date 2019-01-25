@@ -115,7 +115,7 @@ public:
 
 	// input a bool
 	// " (y/n) " will be appended to prompt
-	Bool Input::Bool(const std::string &prompt) {
+	Bool Bool(const std::string &prompt) {
 		slisc::Bool out;
 		if (m_status == Stat::NO_IO) {
 			// no IO
