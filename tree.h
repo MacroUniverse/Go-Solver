@@ -450,19 +450,38 @@ public:
 		return treeInd < 0 ? m_treeInd : treeInd;
 	}
 	
-	// see if a node resolves a ko link, and resolve it
-	Int resolve_ko(Long_I treeInd = -1)
+	// try to resolve all ko links to a node
+	// return the number of unresolved links
+	Int resolve_ko(Long_I treeInd_to)
 	{
+		Int i, j, Nko = m_ko_link_to.size();
+		Node &node = Tree::node(treeInd_to);
+		for (i = node.nlast() - 1; i >= 0; --i) {
+			if (node.is_last_ko_link(i)) {
+				resolve_ko1(node.last(i), treeInd_to);
+				--Nko;
+			}
+		}
+		return Nko;
+	}
+
+	// resolves a ko link, and resolve it
+	// return the number of unresolved links
+	Int resolve_ko1(Long_I treeInd_from, Long_I treeInd_to)
+	{
+		Bool check = false;
 		Int i, Nko = m_ko_link_to.size();
-		Long_I treeInd1 = def(treeInd);
 		for (i = 0; i < Nko; ++i) {
-			if (m_ko_link_to[i] == treeInd1) {
+			if (m_ko_link_to[i] == treeInd_to && m_ko_link_from[i] == treeInd_from) {
 				m_ko_link_from.erase(m_ko_link_from.begin() + i);
 				m_ko_link_to.erase(m_ko_link_to.begin() + i);
 				--Nko;
+				check = true;
 				break;
 			}
 		}
+		if (!check)
+			error("ko link not found!");
 		return Nko;
 	}
 
@@ -470,47 +489,62 @@ public:
 	// change all downstream ko links to the upstream to normal links
 	// and change normal links from all parents to ko links
 	// this node must not be a clean ko node
-	void shift_ko_links(Long_I treeInd_from, Int_I forkInd)
+	void shift_ko_links(Long_I treeInd_parent, Int_I forkInd)
 	{
 		Int i;
-		Long treeInd_to = next(treeInd_from, forkInd);
-		Node & node = Tree::node(treeInd_to);
-		Move mov = unlink(treeInd_from, forkInd);
-		// destroy ko links from downstream to upstream
-		shift_ko_links0(treeInd_to, treeInd_to);
+		Long treeInd1 = next(treeInd_parent, forkInd);
+		Node & node = Tree::node(treeInd1);
+		Move mov = unlink(treeInd_parent, forkInd);
+		vector<Long> treeInd_from, treeInd_to;
+		// ko links from downstream to upstream converts to normal links
+		ko_links(treeInd_from, treeInd_to, treeInd1);
+		for (i = treeInd_to.size() - 1; i >= 0; --i) {
+			if (islinked(treeInd_to[i], treeInd_from[i])) {
+				ko_link_2_link(treeInd_from[i], treeInd_to[i]);
+			}
+		}
 		// change all parents as descendents with a ko link
 		for (i = node.nlast() - 1; i >= 0; --i) {
 			if (!node.is_last_ko_link(i)) {
-				link_2_ko_link(node.last(i), treeInd_to);
+				link_2_ko_link(node.last(i), treeInd1);
 			}
 		}
-		link(treeInd_from, mov, treeInd_to);
+		link(treeInd_parent, mov, treeInd1);
 	}
 
-	// internal recursive function called by shift_ko_links()
-	// treeInd1 is the node in shift_ko_links
-	void shift_ko_links0(Long_I treeInd1, Long_I treeInd)
+	// find all downstream ko links of a node through ko children
+	// this is a recursive function
+	void ko_links(vector<Long> &ko_from, vector<Long> &ko_to, Long_I treeInd = -1)
 	{
+		const Long treeInd1 = def(treeInd);
 		Int i;
 		Long ko_treeInd;
-		Node & node = Tree::node(treeInd);
+		Node & node = Tree::node(treeInd1);
 		for (i = 0; i < node.nnext(); ++i) {
-			if (is_ko_child(treeInd, i)) {
+			if (is_ko_child(treeInd1, i)) {
 				// found a ko child
-				shift_ko_links0(treeInd1, node.next(i));
+				ko_links(ko_from, ko_to, treeInd1);
 			}
 			else if (node.is_next_ko_link(i)) {
 				// found a ko link
-				ko_treeInd = node.next(i);
-				if (ko_treeInd == treeInd) {
-					continue;
-				}
-				else if (islinked(ko_treeInd, treeInd)) {
-					// change ko link to normal link
-					ko_link_2_link(treeInd, ko_treeInd);
-				}
+				ko_from.push_back(treeInd1);
+				ko_to.push_back(next(i));
 			}
 			// ignoring normal child
+		}
+	}
+
+	// force resolve all downstream ko links
+	// used when the parent of a ko link or ko child is solved
+	void resolve_ko_force(Long_I treeInd = -1)
+	{
+		Int i;
+		Long treeInd1 = def(treeInd);
+		vector<Long> treeInd_from;
+		vector<Long> treeInd_to;
+		ko_links(treeInd_from, treeInd_to, treeInd1);
+		for (i = treeInd_from.size() - 1; i >= 0; --i) {
+			resolve_ko1(treeInd_from[i], treeInd_to[i]);
 		}
 	}
 
@@ -1283,7 +1317,7 @@ inline void Tree::solve_end(Long_I treeInd)
 
 Int Tree::solve(Long_I treeInd /*optional*/)
 {
-	Bool debug_stop = nnode() >= 314; // nnode() >= 2492 || treeInd1 == 1; // debug
+	Bool debug_stop = nnode() >= 200; // nnode() >= 2492 || treeInd1 == 1; // debug
 	Bool save = false;
 	static Bool auto_solve = false;
 	Int i, move_ret, solve_ret, solve_ko_ret, child_treeInd;
@@ -1311,7 +1345,7 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 
 	// enumerate children
 	for (i = 0; i < 100000; ++i) {
-		debug_stop = nnode() >= 314;
+		debug_stop = nnode() >= 200;
 
 		// prompt_move() or rand_smart_move
 		if (treeInd1 >= auto_solve_treeInd) {
@@ -1403,7 +1437,6 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 				if (solve_ret == 0) {
 					// successful!
 					child_sol = solution(child_treeInd);
-					// check if there is a color flip
 				}
 				else { // (solve_ret == 2)
 					// a ko node with all ko links resolved
@@ -1416,7 +1449,12 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 					if (best_solvable_child_sol == Sol::GOOD) {
 						set_solution(Sol::BAD, treeInd1);
 						set_score2(inv_score2(best_solvable_child_sco2), treeInd1);
-						resolve_ko(treeInd1);
+						if (has_ko_link || has_ko_child) {
+							resolve_ko_force(treeInd1);
+						}
+						else {
+							resolve_ko(treeInd1);
+						}
 						return 0; // debug break point
 					}
 				}
@@ -1432,7 +1470,10 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 			} // end debug
 			// break the link first
 			child_treeInd = next(treeInd1, -1);
+
+			//#####################################
 			solve_ko_ret = solve_ko(treeInd1, -1);
+			//#####################################
 
 			if (solve_ko_ret == 0 || solve_ko_ret == 1) {
 				// 0: solved to solvable node
@@ -1451,7 +1492,12 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 					if (best_solvable_child_sol == Sol::GOOD) {
 						set_solution(Sol::BAD, treeInd1);
 						set_score2(inv_score2(best_solvable_child_sco2), treeInd1);
-						resolve_ko(treeInd1);
+						if (has_ko_link || has_ko_child) {
+							resolve_ko_force(treeInd1);
+						}
+						else {
+							resolve_ko(treeInd1);
+						}
 						return 0; // debug break point
 					}
 				}
