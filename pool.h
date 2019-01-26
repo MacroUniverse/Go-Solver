@@ -23,16 +23,10 @@ public:
 	Long size() const { return m_boards.size(); }
 
 	// get a board reference by order index
-	const Config & operator[](Long_I orderInd) const
-	{
-		return m_boards[m_order[orderInd]];
-	}
+	const Config & operator[](Long_I orderInd) const;
 
 	// get a board reference by pool index
-	const Config & operator()(Long_I poolInd) const
-	{
-		return m_boards[poolInd];
-	}
+	const Config & operator()(Long_I poolInd) const;
 
 	// get pool index from order index
 	Long poolInd(Long_I orderInd) const;
@@ -67,7 +61,17 @@ public:
 	void link(Long_I orderInd, Who_I who_config, Long_I treeInd);
 };
 
-Long Pool::poolInd(Long_I orderInd) const
+inline const Config & Pool::operator[](Long_I orderInd) const
+{
+	return m_boards[m_order[orderInd]];
+}
+
+inline const Config & Pool::operator()(Long_I poolInd) const
+{
+	return m_boards[poolInd];
+}
+
+inline Long Pool::poolInd(Long_I orderInd) const
 {
 	return m_order[orderInd];
 }

@@ -91,9 +91,9 @@ If neither ko (打劫) nor upward fork is considered, the above algorithm for so
 * If a node found a good ko child, but not good solvable child, then it is a bad ko child. No need to check other children.
 * If a node has at least a non-good ko child but no ko link, then solve the other children one by one. If there exists a solvable child with a equal or higher score than the best ko child, then the node can be solved based on the best solvable child. Otherwise, this is a ko node, set the score and solution based on the best ko child.
 * If a node has at least a ko link and at least a non-good ko child, then this node is a ko node, set the score and solution based on the score of all children except ko links.
-* A ko is resolved when it's target is marked as a ko node, or when one of it's upstream node is solved before that.
-* A parent of node that resolves all the downstream ko links (the node itself will not have ko link) can be solved based on the best children.
-* A non-bad ko node always has all children checked.
+* A ko is resolved when it's target is solved or marked as a ko node.
+* A ko node with all downstream ko links resolved is a clean ko node.
+* A clean ko node is eqivalent to a solvable child when solving it's parent.
 
 ### Flipped Ko
 * A flipped Ko is a same situation in the upstream of a node, with the colors of all stones flipped.
