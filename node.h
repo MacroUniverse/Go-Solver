@@ -156,6 +156,7 @@ public:
 	void delete_last(Int_I forkInd)
 	{
 		m_last.erase(m_last.begin() + forkInd);
+		m_last_mov.erase(m_last_mov.begin() + forkInd);
 	}
 
 	// remove one element from m_next

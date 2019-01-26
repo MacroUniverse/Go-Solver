@@ -100,6 +100,9 @@ If neither ko (打劫) nor upward fork is considered, the above algorithm for so
 * A flipped ko is when the player creating a same situation for himself.
 * For now I'm assuming all flipped ko are trivial and checking for non-trivial case.
 
+### Linking to an Existing Ko Node
+* shift [resolved downstream ko links to up stream] along ko loop until it targets the ko node being linked, than solve that ko node with the same algorithm as solving any node (except some downstream nodes already exist).
+
 ## GNU go
 GNU go can play 5x5 to 19x19 boards. So it might be used to guess the best child for these boards. Another advantage is it might be written in c.
 
