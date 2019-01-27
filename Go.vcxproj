@@ -151,8 +151,10 @@
     <ClInclude Include="node.h" />
     <ClInclude Include="pool.h" />
     <ClInclude Include="tree.h" />
-    <ClInclude Include="tree_solve.h" />
     <ClInclude Include="ui.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="tree_solve.inl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

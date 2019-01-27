@@ -18,8 +18,8 @@ private:
 
 public:
 	// unresolved ko links
-	vector<Long> m_ko_link_to;
-	vector<Long> m_ko_link_from;
+	vector<Long> m_unreso_ko_link_to;
+	vector<Long> m_unreso_ko_link_from;
 
 	// ko nodes with all ko links resolved
 	vector<Long> m_clean_ko_node;
@@ -105,10 +105,17 @@ public:
 
 	Bool is_ko_child(Long_I treeInd = -1, Int_I forkInd = 0) const;
 
-	inline Bool is_next_ko_link(Long_I treeInd = -1, Int_I forkInd = 0) const;
+	Bool is_next_ko_link(Long_I treeInd = -1, Int_I forkInd = 0) const;
 
 	// check if same board already exists in the Pool and decide if it is a Ko
-	inline Int check_ko(Int_O search_ret, Long_O treeInd_match, Long_O orderInd, Long_I treeInd, Config_I config, Bool_I flip);
+	// 'nodes[treeInd]' will produce 'config' in the next move
+	// if board already exists, output tree index of the same board
+	// return 0 if this is a new configuration
+	// return -1 if situation exists but not a ko
+	// return -2 if situation exists and is a ko
+	// return -3 if this is a new situation of an existing configuration
+	Int check_ko(Int_O search_ret, Long_O treeInd_match, Long_O orderInd,
+		Long_I treeInd, Config_I config, Bool_I flip) const;
 
 	// create a ko link and push to unresolved list (m_ko_link_to/from)
 	void ko_link(Long_I treeInd_from, Move_I mov, Long_I treeInd_to);
@@ -150,13 +157,8 @@ public:
 
 	// ========= move related methods ==================
 
-	// return 0 if new node created
-	// return -1 if double pass caused game end
-	// return -2 if double pass attempted but game did not finish, this is treated as a ko
-	// return 1 if linked to an existing normal node or clean ko node.
-	// return 2 if ko link is created
-	// return 3 if linked to an (unclean) ko node
-	inline Int pass(Long_I treeInd = -1);
+
+	MovRet pass(Long_I treeInd = -1);
 
 	// check if a placing is legal, or how many stones will be dead
 	// same check already exists for place()
@@ -164,31 +166,32 @@ public:
 	// if legal, return the number of stones that can be removed ( >= 0)
 	// return -1 if occupied, do nothing
 	// return -2 if no qi, do nothing
-	inline Int check(Char_I x, Char_I y, Long_I treeInd = -1);
+	Int check(Char_I x, Char_I y, Long_I treeInd = -1);
 
-	// return 0 if new node created (m_treeInd jumped)
-	// return 1 if linked to an existing normal node or clean ko node (m_treeInd jumped)
-	// return 2 if linked to a (unclean) ko node
+	// return 0 if new node created
+	// return 1 if linked to a non-ko (solved/forbidden/unkown) node
+	// return 2 if linked to an unclean ko node
+	// return 3 if linked to a clean ko node
 	// return -1 if illegal (nothing changes)
-	// return -2 if a ko is found and linked (m_treeInd unchanged)
+	// return -2 if a ko link is created
 	// already has bound checking
-	inline Int place(Char_I x, Char_I y, Long_I treeInd = -1);
+	MovRet place(Char_I x, Char_I y, Long_I treeInd = -1);
 
 	// smarter random move for a node
 	// will not do a dumb move (dumb eye filling or dumb big eye filling)
 	// return 0 if successful and new node created
-	// return 1 if linked to existing normal node or clean ko node
+	// return 1 if linked to a normal node
 	// return 2 if a ko link is created
-	// return 3 if sucessful but is a dumb move
-	// return 4 if linked to an existing non-clean ko node
+	// return 3 if linked to a clean ko node
+	// return 4 if linked to a unclean ko node
 	// return -1 if all legal moves already exists
 	// return -2 if passed and game ends
 	// return -3 if double pass not allowed and ko link created
-	inline Int rand_smart_move(Long_I treeInd = -1);
+	MovRet rand_smart_move(Long_I treeInd = -1);
 
 	// prompt user for a move
 	// returns are the same as auto_smart_move()
-	inline Int prompt_move(Long_I treeInd = -1);
+	MovRet prompt_move(Long_I treeInd = -1);
 
 	// randomly play to the end of the game from a node
 	// m_treeInd will be changed to the end node!
@@ -268,7 +271,7 @@ public:
 	// assuming there is no branch after treeInd for now
 	// return 0 if successful
 	// return 1 if double pass (two nodes linked by the first pass both solved)
-	// return -1 if is a non-clean ko node
+	// return -1 if is a unclean ko node
 	// return 2 if is a clean ko node
 	// return 3 if is a forbidden node
 	Int solve(Long_I treeInd = -1);
@@ -295,7 +298,7 @@ BoardRef Tree::get_board(Long_I treeInd) const
 	return board_ref;
 }
 
-inline Int Tree::nlast(Long_I treeInd = -1) const
+inline Int Tree::nlast(Long_I treeInd) const
 {
 	return m_nodes[def(treeInd)].nlast();
 }
@@ -309,21 +312,21 @@ Tree::Tree() : m_treeInd(0)
 	m_nodes.push_back(Node()); m_nodes.back().init();
 }
 
-inline Bool Tree::isend(Long_I treeInd /*optional*/) const
+inline Bool Tree::isend(Long_I treeInd) const
 {
 	if (m_nodes[def(treeInd)].isend())
 		return true;
 	return false;
 }
 
-inline Bool Tree::is_next_ko_link(Long_I treeInd /*optional*/, Int_I forkInd /*optional*/) const
+inline Bool Tree::is_next_ko_link(Long_I treeInd, Int_I forkInd) const
 {
 	if (m_nodes[def(treeInd)].is_next_ko_link(forkInd))
 		return true;
 	return false;
 }
 
-inline Long Tree::last(Long_I treeInd /*optional*/, Int_I forkInd /*optional*/) const
+inline Long Tree::last(Long_I treeInd, Int_I forkInd) const
 {
 	const Node &node = m_nodes[def(treeInd)];
 	return node.last(forkInd);
@@ -334,17 +337,17 @@ const Node & Tree::lastNode(Long_I treeInd, Int_I forkInd) const // return a ref
 	return m_nodes[last(def(treeInd), forkInd)];
 }
 
-inline Long Tree::next(Long_I treeInd /*optional*/, Int_I forkInd /*optional*/) const
+inline Long Tree::next(Long_I treeInd, Int_I forkInd) const
 {
 	return node(def(treeInd)).next(forkInd);
 }
 
-inline const Node & Tree::nextNode(Long_I treeInd = -1, Int_I forkInd = 0) const
+inline const Node & Tree::nextNode(Long_I treeInd, Int_I forkInd) const
 {
 	return m_nodes[next(def(treeInd), forkInd)];
 }
 
-Node & Tree::nextNode(Long_I treeInd = -1, Int_I forkInd = 0) // return a reference of the next node of a node
+Node & Tree::nextNode(Long_I treeInd, Int_I forkInd) // return a reference of the next node of a node
 {
 	return m_nodes[next(def(treeInd), forkInd)];
 }
@@ -379,7 +382,7 @@ Move Tree::nextMove(Long_I treeInd, Int_I forkInd) const
 	return nextNode(treeInd1, forkInd).move(inv_fork);
 }
 
-Who Tree::who_config(Long_I treeInd = -1) const
+Who Tree::who_config(Long_I treeInd) const
 {
 	const Long treeInd1 = def(treeInd);
 	if (treeInd1 == 0)
@@ -389,7 +392,7 @@ Who Tree::who_config(Long_I treeInd = -1) const
 	return who(treeInd1);
 }
 
-inline void Tree::disp_board(Long_I treeInd /*optional*/) const
+inline void Tree::disp_board(Long_I treeInd) const
 {
 	Char x, y;
 	Int i;
@@ -421,7 +424,7 @@ inline void Tree::disp_board(Long_I treeInd /*optional*/) const
 	cout << '\n' << endl;
 };
 
-inline Int Tree::pass(Long_I treeInd /*optional*/)
+inline MovRet Tree::pass(Long_I treeInd)
 {
 	Int i, ret;
 	Long ko_treeInd;
@@ -433,18 +436,20 @@ inline Int Tree::pass(Long_I treeInd /*optional*/)
 	for (i = 0; i < node.nlast(); ++i) {
 		if (node.move(i).ispass()) {
 			// double passed!
-			if (!board.is_game_end()) {
+			if (board.is_game_end()) {
+				// two situations have the same scores and solutions!
+				calc_score(treeInd1);
+				calc_sol(treeInd1);
+				set_score2(inv_score2(node.score2()), last(treeInd1, i));
+				set_solution(inv_sol(node.solution()), last(treeInd1, i));
+				return MovRet::DB_PAS_END;
+			}
+			else {
 				// game not ended, build a ko link
 				ko_treeInd = last(treeInd1, i);
 				ko_link(treeInd1, Move(Act::PASS), ko_treeInd);
-				return -2;
+				return MovRet::DB_PAS_KO_LN;
 			}
-			// two situations have the same scores and solutions!
-			calc_score(treeInd1);
-			calc_sol(treeInd1);
-			set_score2(inv_score2(node.score2()), last(treeInd1, i));
-			set_solution(inv_sol(node.solution()), last(treeInd1, i));
-			return -1;
 		}
 	}
 
@@ -453,37 +458,46 @@ inline Int Tree::pass(Long_I treeInd /*optional*/)
 	Long orderInd, treeInd_found;
 	ret = check_ko(search_ret, treeInd_found, orderInd, treeInd1, board.config(), board.trans().flip());
 
-	if (ret == -1) { // situation exists, not a ko
+	if (ret == -3) {
+		// configuration exists, new situation
+		m_nodes.push_back(Node());
+		m_nodes.back().set(::next(who(treeInd1)), m_pool.poolInd(orderInd), board.trans());
+		link(treeInd1, Move(Act::PASS), max_treeInd());
+		m_pool.link(orderInd, ::next(who_config(treeInd1)), max_treeInd());
+		return MovRet::NEW_ND;
+	}
+	else if (ret == -1) {
+		// situation exists, not a ko
 		link(treeInd1, Move(Act::PASS), treeInd_found);
-		if (is_ko_node(treeInd_found) && check_clean_ko_node(treeInd_found) == -1) {
-			// linked to a ko node but not clean
-			return 2;
+		if (is_ko_node(treeInd_found)) {
+			// linked to a ko node
+			if (check_clean_ko_node(treeInd_found) >= 0) {
+				// linked to a clean ko node
+				return MovRet::LN_CLN_KO_ND;
+			}
+			else {
+				// linked to an unclean ko node
+				return MovRet::LN_UCLN_KO_ND;
+			}
 		}
 		else {
-			// linked to a normal node or a clean ko node
-			return 1;
+			// linked to a non-ko (solved/forbidden/unkown) node
+			return MovRet::LN_NKO_ND;
 		}
 	}
-	else if (ret == -2) { // situation exists, is a ko
+	else if (ret == -2) {
+		// situation exists, is a ko
 		ko_link(treeInd1, Move(Act::PASS), treeInd_found);
-		return 2;
+		return MovRet::KO_LN;
 	}
 	else if (ret == 0) { // configuration does not exist
 		error("impossible case, configuration must exist!");
 	}
-	else if (ret != -3)
-		error("unknown return!");
-
-	// normal first pass (ret == -3): configuration exists, new situation
-
-	m_nodes.push_back(Node());
-	m_nodes.back().set(::next(who(treeInd1)), m_pool.poolInd(orderInd), board.trans());
-	link(treeInd1, Move(Act::PASS), max_treeInd());
-	m_pool.link(orderInd, ::next(who_config(treeInd1)), max_treeInd());
-	return 0;
+	else
+		error("unhancled case!");
 }
 
-inline Int Tree::check(Char_I x, Char_I y, Long_I treeInd /*optional*/)
+inline Int Tree::check(Char_I x, Char_I y, Long_I treeInd)
 {
 	Int ret;
 	const Long treeInd1 = def(treeInd);
@@ -494,7 +508,7 @@ inline Int Tree::check(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 	return get_board(treeInd1).check(x, y, ::next(who(treeInd1)));
 }
 
-inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
+inline MovRet Tree::place(Char_I x, Char_I y, Long_I treeInd)
 {
 	Int ret;
 	const Long treeInd1 = def(treeInd);
@@ -511,12 +525,12 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 		m_nodes.push_back(Node());
 		m_nodes.back().set(Who::BLACK, m_pool.size() - 1, board.trans());
 		link(treeInd1, Move(x, y), max_treeInd());
-		return 0;
+		return MovRet::NEW_ND;
 	}
 
 	// update board and check illegal move (Ko no checked!)
 	if (board.place(x, y, next_who))
-		return -1;
+		return MovRet::ILLEGAL;
 
 	// check Ko
 	Int search_ret;
@@ -524,28 +538,37 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 	Long treeInd_found;
 	ret = check_ko(search_ret, treeInd_found, orderInd, treeInd1, board.config(), board.trans().flip());
 	if (ret < 0) { // board already exists
-		if (ret == -1) { // not a ko
+		if (ret == -1) {
+			// not a ko
 			link(treeInd1, Move(x, y), treeInd_found);
-			if (is_ko_node(treeInd_found) && check_clean_ko_node(treeInd_found) == -1) {
-				// linked to a ko node but not clean
-				return 2;
+			if (is_ko_node(treeInd_found)) {
+				// linked to a ko node
+				if (check_clean_ko_node(treeInd_found) >= 0) {
+					// linked to a clean ko node
+					return MovRet::LN_CLN_KO_ND;
+				}
+				else {
+					// linked to an unclean ko node
+					return MovRet::LN_UCLN_KO_ND;
+				}
 			}
 			else {
-				// linked to a normal node or a clean ko node
-				return 1;
+				// linked to a non-ko (solved/forbidden/unkown) node
+				return MovRet::LN_NKO_ND;
 			}
 		}
-		else if (ret == -2) { // is a ko
+		else if (ret == -2) {
+			// is a ko
 			ko_link(treeInd1, Move(x, y), treeInd_found);
-			return -2;
+			return MovRet::KO_LN;
 		}
-		// ret == -3: not the same player, continue
 	}
 
 	// new situation
 	m_nodes.push_back(Node()); // add Node to tree
 
-	if (ret == -3) { // configuration exists
+	if (ret == -3) {
+		// configuration exists
 		Who next_who_config;
 		if (board.trans().flip())
 			next_who_config = ::next(next_who);
@@ -560,7 +583,7 @@ inline Int Tree::place(Char_I x, Char_I y, Long_I treeInd /*optional*/)
 	}
 
 	link(treeInd1, Move(x, y), max_treeInd());
-	return 0;
+	return MovRet::NEW_ND;
 }
 
 inline void Tree::link(Long_I treeInd_from, Move_I mov, Long_I treeInd_to)
@@ -617,14 +640,8 @@ inline Int Tree::islinked(Long_I treeInd_from, Long_I treeInd_to) const
 	return false;
 }
 
-// 'nodes[treeInd]' will produce 'config' in the next move
-// if board already exists, output tree index of the same board
-// return 0 if this is a new configuration
-// return -1 if situation exists but not a ko
-// return -2 if situation exists and is a ko
-// return -3 if this is a new situation of an existing configuration
 inline Int Tree::check_ko(Int_O search_ret, Long_O treeInd_match, Long_O orderInd,
-	Long_I treeInd, Config_I config, Bool_I flip)
+	Long_I treeInd, Config_I config, Bool_I flip) const
 {
 	Long poolInd;
 	search_ret = m_pool.search(poolInd, orderInd, config);
@@ -649,8 +666,8 @@ inline void Tree::ko_link(Long_I treeInd_from, Move_I mov, Long_I treeInd_to)
 {
 	node(treeInd_from).push_next(-treeInd_to - 1);
 	node(treeInd_to).push_last(mov, -treeInd_from - 1);
-	m_ko_link_from.push_back(treeInd_from);
-	m_ko_link_to.push_back(treeInd_to);
+	m_unreso_ko_link_from.push_back(treeInd_from);
+	m_unreso_ko_link_to.push_back(treeInd_to);
 }
 
 inline void Tree::ko_link_2_link(Long_I treeInd_from, Long_I treeInd_to)
@@ -966,7 +983,7 @@ inline void Tree::writeSGF0_link(ofstream &fout, Long_I treeInd_from, Int_I fork
 	fout << "\n";
 }
 
-inline Bool Tree::nextMove_exist(Move mov, Long_I treeInd /*optional*/) const
+inline Bool Tree::nextMove_exist(Move mov, Long_I treeInd) const
 {
 	Int i, j;
 	vector<Move> moves;
@@ -1001,9 +1018,10 @@ inline Bool Tree::is_ko_child(Long_I treeInd, Int_I forkInd) const
 	return !node.is_next_ko_link(forkInd) && is_ko_node(node.next(forkInd));
 }
 
-inline Int Tree::prompt_move(Long_I treeInd)
+inline MovRet Tree::prompt_move(Long_I treeInd)
 {
-	Int i, ret;
+	Int i;
+	MovRet ret;
 	Int x, y;
 	Long treeInd1 = def(treeInd);
 
@@ -1016,47 +1034,26 @@ inline Int Tree::prompt_move(Long_I treeInd)
 		if (x < 0 || y < 0) {
 			if (nextMove_exist(Move(Act::PASS), treeInd1)) {
 				if (inp.Bool("move exists, does all moves exist?")) {
-					return -1;
+					return MovRet::ALL_EXIST;
 				}
 				cout << "try again!" << endl;
 				continue;
 			}
-			ret = pass(treeInd1);
-
-			if (ret == -1)
-				return -2; // double pass successful
-			else if (ret == 0)
-				return 0; // first pass
-			else if (ret == -2) {
-				return -3; // double pass not allowed
-			}
-			else if (ret == 1) {
-				return 1; // linked to existing normal node or clean ko node
-			}
-			else if (ret == 2) {
-				return 2; // ko link created
-			}
-			else if (ret == 3) {
-				// linked to an(unclean) ko node
-				return 4;
-			}
-			else
-				error("unhandled case!");
-			}
+			return pass(treeInd1);
+		}
 		else {
 			// make a move
 			BoardRef board = get_board(treeInd1);
 			// check existence
 			if (nextMove_exist(Move(x, y), treeInd1)) {
 				if (inp.Bool("move exists, does all moves exist?")) {
-					return -1;
+					return MovRet::ALL_EXIST;
 				}
 				cout << "try again!" << endl;
 				continue;
 			}
 			// check legal and number of removal
-			ret = check(x, y, treeInd1);
-			if (ret < 0)
+			if (check(x, y, treeInd1) < 0)
 				cout << "illegal move, try again!" << endl;
 			// check dumb eye filling
 			if (board.is_dumb_eye_filling(x, y, ::next(who(treeInd1)))) {
@@ -1068,30 +1065,26 @@ inline Int Tree::prompt_move(Long_I treeInd)
 			
 			ret = place(x, y, treeInd1);
 
-			if (ret == -1) {
-				cout << "illegal move, try again!" << endl; // illegal move, no change
+			if (ret == MovRet::ILLEGAL) {
+				cout << "illegal move, try again!" << endl;
 				continue;
 			}
-			else if (ret == 0)
-				return 0; // new node created
-			else if (ret == 1)
-				return 1; // linked to a normal node, or clean ko node
-			else if (ret == 2)
-				return 4; // linked to a non-clean ko node
-			else if (ret == -2) {
-				cout << "ko, try again!" << endl; // linked to existing node, has ko
+			else if (ret == MovRet::KO_LN) {
+				// ko link created
+				cout << "ko, try again!" << endl;
 				continue;
 			}
 		}
 	}
 	error("should not reach here");
-	return -100;
+	return MovRet::ILLEGAL;
 }
 
-inline Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
+inline MovRet Tree::rand_smart_move(Long_I treeInd)
 {
 	Bool exist, exist_pass = false;
-	Int i, j, ret, Nx = board_Nx(), Ny = board_Ny(), Nxy = Nx*Ny;
+	Int i, j, Nx = board_Nx(), Ny = board_Ny(), Nxy = Nx*Ny;
+	MovRet ret;
 	Char x0, y0, x, y;
 	VecInt xy;
 	Long_I treeInd1 = def(treeInd);
@@ -1109,16 +1102,9 @@ inline Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 			continue;
 		// check legal and number of removal
 		ret = place(x, y, treeInd1);
-		if (ret == -1)
+		if (ret == MovRet::ILLEGAL)
 			continue; // illegal move, no change
-		else if (ret == 0)
-			return 0; // new node created
-		else if (ret == 1)
-			return 1; // linked to a normal node, or clean ko node
-		else if (ret == 2)
-			return 4; // linked to a non-clean ko node
-		else if (ret == -2)
-			return 2; // linked to existing node, has ko
+		return ret;
 	}
 
 	// random sequence of all grid points on board
@@ -1131,8 +1117,7 @@ inline Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 		if (nextMove_exist(Move(x, y), treeInd1))
 			continue;
 		// check legal and number of removal
-		ret = check(x, y, treeInd1);
-		if (ret < 0)
+		if (check(x, y, treeInd1) < 0)
 			continue;
 		// check dumb eye filling
 		if (board.is_dumb_eye_filling(x, y, ::next(who(treeInd1)))) {
@@ -1141,50 +1126,26 @@ inline Int Tree::rand_smart_move(Long_I treeInd /*optional*/)
 		if (board.is_dumb_2eye_filling(x, y, ::next(who(treeInd1)))) {
 			continue;
 		}
+
 		ret = place(x, y, treeInd1);
-		if (ret == -1)
-			continue; // illegal move, no change
-		else if (ret == 0)
-			return 0; // new node created
-		else if (ret == 1)
-			return 1;  // linked to an existing normal node or clean ko node
-		else if (ret == -2)
-			return 2; // ko link created
-		else if (ret == 2)
-			return 4; // linked to a non-clean ko node
+		if (ret == MovRet::ILLEGAL)
+			error("impossible!");
+		return ret;
 	}
 
 	// no non-dumb placing left, consider passing
 	if (!nextMove_exist(Move(Act::PASS), treeInd1)) {
-		ret = pass(treeInd1);
-		if (ret == -1)
-			return -2; // double pass successful
-		else if (ret == 0)
-			return 0; // first pass
-		else if (ret == -2) {
-			return -3; // double pass not allowed
-		}
-		else if (ret == 1) {
-			return 1; // linked to existing normal node or clean ko node
-		}
-		else if (ret == 2) {
-			return 2; // ko link created
-		}
-		else if (ret == 3) {
-			// linked to an(unclean) ko node
-			return 4;
-		}
-		else
-			error("unhandled case!");
+		return pass(treeInd1);
 	}
 
 	// all leagl moves already exist
-	return -1;
+	return MovRet::ALL_EXIST;
 }
 
 inline Int Tree::rand_game(Long_I treeInd, Bool_I out)
 {
-	Int i, ret;
+	Int i;
+	MovRet ret;
 
 	m_treeInd = treeInd;
 
@@ -1200,11 +1161,11 @@ inline Int Tree::rand_game(Long_I treeInd, Bool_I out)
 
 	for (i = 1; i < 10000; ++i) {
 		ret = rand_smart_move();
-		if (ret == -1) {
+		if (ret == MovRet::ALL_EXIST) {
 			if (out) cout << "all moves exists\n\n\n";
 			break;
 		}
-		if (ret == -2) {
+		if (ret == MovRet::DB_PAS_END) {
 			if (out) cout << "double pass !\n\n\n";
 			break;
 		}
@@ -1234,7 +1195,7 @@ inline Int Tree::rand_game(Long_I treeInd, Bool_I out)
 
 inline Int Tree::resolve_ko(Long_I treeInd_to)
 {
-	Int i, j, Nko = m_ko_link_to.size();
+	Int i, j, Nko = m_unreso_ko_link_to.size();
 	Node &node = Tree::node(treeInd_to);
 	for (i = node.nlast() - 1; i >= 0; --i) {
 		if (node.is_last_ko_link(i)) {
@@ -1247,11 +1208,11 @@ inline Int Tree::resolve_ko(Long_I treeInd_to)
 
 inline Int Tree::resolve_ko1(Long_I treeInd_from, Long_I treeInd_to)
 {
-	Int i, Nko = m_ko_link_to.size();
+	Int i, Nko = m_unreso_ko_link_to.size();
 	for (i = 0; i < Nko; ++i) {
-		if (m_ko_link_to[i] == treeInd_to && m_ko_link_from[i] == treeInd_from) {
-			m_ko_link_from.erase(m_ko_link_from.begin() + i);
-			m_ko_link_to.erase(m_ko_link_to.begin() + i);
+		if (m_unreso_ko_link_to[i] == treeInd_to && m_unreso_ko_link_from[i] == treeInd_from) {
+			m_unreso_ko_link_from.erase(m_unreso_ko_link_from.begin() + i);
+			m_unreso_ko_link_to.erase(m_unreso_ko_link_to.begin() + i);
 			--Nko;
 			return Nko;
 		}
@@ -1261,9 +1222,9 @@ inline Int Tree::resolve_ko1(Long_I treeInd_from, Long_I treeInd_to)
 inline Bool Tree::is_ko_resolved(Long_I treeInd_from, Long_I treeInd_to) const
 {
 	Int i;
-	for (i = m_ko_link_from.size() - 1; i >= 0; --i) {
-		if (m_ko_link_from[i] == treeInd_from) {
-			if (m_ko_link_to[i] == treeInd_to) {
+	for (i = m_unreso_ko_link_from.size() - 1; i >= 0; --i) {
+		if (m_unreso_ko_link_from[i] == treeInd_from) {
+			if (m_unreso_ko_link_to[i] == treeInd_to) {
 				return false;
 			}
 		}
@@ -1396,3 +1357,5 @@ void Tree::calc_score(Long_I treeInd) // calculate territory and save to m_terri
 	Int sco2 = get_board(treeInd1).calc_territory2(who(treeInd1));
 	set_score2(sco2, treeInd1);
 }
+
+#include "tree_solve.inl"

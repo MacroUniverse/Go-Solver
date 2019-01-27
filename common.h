@@ -40,6 +40,24 @@ class Move;
 typedef const Move &Move_I;
 typedef Move &Move_O, &Move_IO;
 
+// consequences of a move
+enum class MovRet : Char
+{
+	NEW_NODE, // new node created
+	NEW_ND, // new node created
+	LN_CLN_KO_ND, // linked to a clean ko node
+	LN_UCLN_KO_ND, // linked to an unclean ko node
+	LN_NKO_ND, // linked to a non-ko node (good/bad/fair/unkown/forbidden)
+	DB_PAS_END, // double pass caused game to end, two nodes are solved
+	DB_PAS_KO_LN, // double pass not allowed, ko link created
+	KO_LN, // ko link created
+	ILLEGAL, // illegal move
+	ALL_EXIST // all children exist
+};
+
+typedef const MovRet &MovRet_I;
+typedef MovRet &MovRet_O, &MovRet_IO;
+
 class Node;
 typedef const Node &Node_I;
 typedef Node &Node_O, &Node_IO;

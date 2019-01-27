@@ -137,7 +137,7 @@ inline Char Node::y(Int_I forkInd) const
 	return m_last_mov[forkInd].y();
 }
 
-inline const Move & Node::move(Int_I forkInd = 0) const
+inline const Move & Node::move(Int_I forkInd) const
 {
 	return m_last_mov[forkInd];
 }
