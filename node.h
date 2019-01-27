@@ -1,4 +1,5 @@
 #include "move.h"
+#include "link.h"
 
 // a node in the game tree
 // a fork index (forkInd) is an index for m_last or m_next
@@ -9,9 +10,8 @@ private:
 	// === data members ===
 
 	Who m_who; // who played this node
-	vector<Long> m_next; // tree indices to next nodes (-1: end node)
-	vector<Long> m_last; // for 0-th node: undefined
-	vector<Move> m_last_mov; // moves of m_last that leads to this node
+	vector<Linkp> m_next; // tree indices to next nodes (-1: end node)
+	vector<Linkp> m_last; // for 0-th node: undefined
 	Long m_poolInd; // pool index, board stored in Pool::m_board[m_pool_ind]
 	Trans m_trans; // transformations needed for the config
 	// solution related
@@ -27,42 +27,29 @@ public:
 
 	Bool isinit() const;
 
-	Bool ispass(Int_I forkInd = 0) const;
-
-	Bool isedit(Int_I forkInd = 0) const;
-
-	Bool isplace(Int_I forkInd = 0) const;
-
-	Char x(Int_I forkInd = 0) const;
-	
-	Char y(Int_I forkInd = 0) const;
-
-	// get the move that leads to this node
-	const Move & move(Int_I forkInd = 0) const;
-
-	// search a parent by tree index
-	// there might be multiple links to a single parent!
-	void parent(vector<Int> &forkInd, Long_I treeInd) const;
-
 	Long poolInd() const;
+
+	Bool is_ko_node() const
+	{
+		return is_ko_sol(solution());
+	}
 
 	const Trans & trans() const;
 
 	Int nlast() const { return m_last.size(); }
 
-	Long last(Int_I forkInd) const;
-
-	Bool is_last_ko_link(Int_I forkInd) const;
+	// link for a parent
+	// forkInd = -1 : last element, forkInd = -2 : second last element, etc.
+	Linkp_I last(Int_I forkInd = 0) const;
 
 	Int nnext() const;
 
-	// tree index for a child
-	// ind = -1 : last element, ind = -2 : second last element, etc.
-	Long next(Int_I ind) const;
+	// find forkInd for m_last for a link
+	const Int last_forkInd(Linkp_I plink) const;
 
-	Bool isend() const; // is this a bottom node (end of game)?
-
-	Bool is_next_ko_link(Int_I ind) const; // is this a ko link?
+	// link for a child
+	// forkInd = -1 : last element, forkInd = -2 : second last element, etc.
+	Linkp_I next(Int_I forkInd = 0) const;
 
 	// set 0-th node (empty board)
 	void init();
@@ -75,28 +62,24 @@ public:
 
 	void set_solution(Sol_I sol);
 
-	void push_last(const Move &mov, Long_I treeInd);
+	void push_last(Linkp_I plink);
 
-	void push_next(Long_I treeInd);
+	void push_next(Linkp_I plink);
 
 	void set(Who_I who, Long_I poolInd, Trans_I trans);
 
-	// change a ko link in m_next to a normal link
-	void next_ko_link_2_link(Int_I forkInd);
+	// change a next link
+	void set_next(Int_I forkInd, Linkp_I plink);
 
-	// change a ko link in m_last to a normal link
-	void last_ko_link_2_link(Int_I forkInd);
+	// change a last link
+	void set_last(Int_I forkInd, Linkp_I plink);
 
-	// change a normal link in m_last to a ko link 
-	void last_link_2_ko_link(Int_I forkInd);
-
-	// change a normal link in m_next to a ko link 
-	void next_link_2_ko_link(Int_I forkInd);
-
-	// remove one element from m_last
+	// remove one link from m_last
+	// will not deallocate link!
 	void delete_last(Int_I forkInd);
 
-	// remove one element from m_next
+	// remove one link from m_next
+	// will not deallocate link!
 	void delete_next(Int_I forkInd);
 
 	~Node() {}
@@ -109,49 +92,9 @@ inline Who Node::who() const
 
 inline Bool Node::isinit() const
 {
-	return m_last_mov[0].isinit();
-}
-
-inline Bool Node::ispass(Int_I forkInd) const
-{
-	return m_last_mov[forkInd].ispass();
-}
-
-inline Bool Node::isedit(Int_I forkInd) const
-{
-	return m_last_mov[forkInd].isedit();
-}
-
-inline Bool Node::isplace(Int_I forkInd) const
-{
-	return m_last_mov[forkInd].isplace();
-}
-
-inline Char Node::x(Int_I forkInd) const
-{
-	return m_last_mov[forkInd].x();
-}
-
-inline Char Node::y(Int_I forkInd) const
-{
-	return m_last_mov[forkInd].y();
-}
-
-inline const Move & Node::move(Int_I forkInd) const
-{
-	return m_last_mov[forkInd];
-}
-
-inline void Node::parent(vector<Int> &forkInd, Long_I treeInd) const
-{
-	Int i, Nlast = nlast();
-	forkInd.resize(0);
-	for (i = 0; i < Nlast; ++i) {
-		if (last(i) == treeInd)
-			forkInd.push_back(i);
-	}
-	if (forkInd.size() == 0)
-		error("parent not found!");
+	if (m_last.size() == 1 & m_last[0]->isinit())
+		return true;
+	return false;
 }
 
 inline Long Node::poolInd() const
@@ -164,18 +107,13 @@ inline const Trans & Node::trans() const
 	return m_trans;
 }
 
-inline Long Node::last(Int_I forkInd) const
+inline const Linkp_I Node::last(Int_I ind) const
 {
-	Long ret = m_last[forkInd];
-	if (ret < 0)
-		return -ret - 1;
+	Long treeInd;
+	if (ind < 0)
+		return m_last[nnext() + ind];
 	else
-		return ret;
-}
-
-inline Bool Node::is_last_ko_link(Int_I forkInd) const
-{
-	return m_last[forkInd] < 0;
+		return m_last[ind];
 }
 
 inline Int Node::nnext() const
@@ -183,49 +121,30 @@ inline Int Node::nnext() const
 	return m_next.size();
 }
 
-inline Long Node::next(Int_I ind) const
+inline const Int Node::last_forkInd(Linkp_I plink) const
+{
+	Int i, Nlast = nlast();
+	for (i = 0; i < Nlast; ++i) {
+		if (last(i) == plink) {
+			return i;
+		}
+	}
+	error("parent not found");
+	return 1000000;
+}
+
+inline const Linkp_I Node::next(Int_I ind) const
 {
 	Long treeInd;
 	if (ind < 0)
-		treeInd = m_next[nnext() + ind];
+		return m_next[nnext() + ind];
 	else
-		treeInd = m_next[ind];
-
-	if (treeInd > 0)
-		return treeInd;
-	else if (treeInd < -1)
-		return -treeInd - 1; // ko link
-	else
-		error("unkown!");
-}
-
-inline Bool Node::isend() const
-{
-	if (m_next.size() == 1 & m_next[0] == -1)
-		return true;
-	return false;
-}
-
-// ind = -1 : last element, ind = -2 : second last element, etc.
-inline Bool Node::is_next_ko_link(Int_I ind) const
-{
-	Long treeInd;
-	if (ind < 0)
-		treeInd = m_next[nnext() + ind];
-	else
-		treeInd = m_next[ind];
-
-	if (treeInd < -1)
-		return true;
-	else if (treeInd > 0)
-		return false;
-	else
-		error("unknown!");
+		return m_next[ind];
 }
 
 inline void Node::init()
 {
-	m_last.resize(0); m_last.push_back(-1); m_last_mov.push_back(Move(Act::INIT));
+	m_last.resize(0); m_last.push_back(new Slink); ((Slink*)m_last.back())->init();
 	m_who = Who::NONE; m_poolInd = 0;
 }
 
@@ -253,14 +172,14 @@ inline void Node::set_solution(Sol_I sol)
 	m_sol = sol;
 }
 
-inline void Node::push_last(const Move &mov, Long_I treeInd)
+inline void Node::push_last(Linkp_I plink)
 {
-	m_last.push_back(treeInd); m_last_mov.push_back(mov);
+	m_last.push_back(link);
 }
 
-inline void Node::push_next(Long_I treeInd)
+inline void Node::push_next(Linkp_I plink)
 {
-	m_next.push_back(treeInd);
+	m_next.push_back(link);
 }
 
 inline void Node::set(Who_I who, Long_I poolInd, Trans_I trans)
@@ -268,49 +187,25 @@ inline void Node::set(Who_I who, Long_I poolInd, Trans_I trans)
 	m_who = who; m_poolInd = poolInd; m_trans = trans;
 }
 
-inline void Node::next_ko_link_2_link(Int_I forkInd)
+inline void Node::set_last(Int_I forkInd, Linkp_I plink)
 {
-#ifdef GOS_CHECK_BOUND
-	if (!is_next_ko_link(forkInd))
-		error("not a ko link!");
-#endif
-	m_next[forkInd] = next(forkInd);
+	m_last[forkInd] = pLink;
 }
 
-inline void Node::last_ko_link_2_link(Int_I forkInd)
+inline void Node::set_next(Int_I forkInd, Linkp_I plink)
 {
-#ifdef GOS_CHECK_BOUND
-	if (!is_last_ko_link(forkInd))
-		error("not a ko link!");
-#endif
-	m_last[forkInd] = last(forkInd);
-}
-
-inline void Node::last_link_2_ko_link(Int_I forkInd)
-{
-#ifdef GOS_CHECK_BOUND
-	if (is_last_ko_link(forkInd))
-		error("not a normal link!");
-#endif
-	m_last[forkInd] = -last(forkInd) - 1;
-}
-
-inline void Node::next_link_2_ko_link(Int_I forkInd)
-{
-#ifdef GOS_CHECK_BOUND
-	if (is_next_ko_link(forkInd))
-		error("not a normal link!");
-#endif
-	m_next[forkInd] = -next(forkInd) - 1;
+	m_next[forkInd] = pLink;
 }
 
 inline void Node::delete_last(Int_I forkInd)
 {
 	m_last.erase(m_last.begin() + forkInd);
-	m_last_mov.erase(m_last_mov.begin() + forkInd);
 }
 
 inline void Node::delete_next(Int_I forkInd)
 {
+	if (m_next[forkInd]) {
+		delete m_next[forkInd];
+	}
 	m_next.erase(m_next.begin() + forkInd);
 }

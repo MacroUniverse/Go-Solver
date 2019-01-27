@@ -28,7 +28,7 @@ enum class Who : Char { NONE, WHITE, BLACK, DEFAULT, DRAW };
 typedef const Who &Who_I;
 typedef Who &Who_IO, &Who_O;
 
-enum class Act : Char { PLACE, PASS, EDIT, INIT };
+enum class Act : Char { PLACE, PASS, EDIT, INIT, END };
 typedef const Act &Act_I;
 typedef Act &Act_O, &Act_IO;
 
@@ -314,12 +314,25 @@ inline void inv_transf(Char_IO x, Char_IO y, Who_O who, Trans trans)
 		who = next(who);
 }
 
+// if a transform does nothing
+inline Bool is_one(Trans_I trans)
+{
+	return trans.rot() == 0 && !trans.flip();
+}
+
 // calculate trans1 += trans2
 inline void operator+=(Trans_IO trans1, Trans_I trans2)
 {
 	trans1.set_rot((trans1.rot() + trans2.rot()) % 4);
 	if (trans2.flip())
 		trans1.set_flip(!trans1.flip());
+}
+
+inline Trans operator-(Trans_I trans1, Trans_I trans2)
+{
+	Trans trans;
+	trans.set_rot(mod(trans1.rot() - trans2.rot(), 4));
+	trans.set_flip(trans1.flip() != trans2.flip());
 }
 
 // calculate trans1 -= trans2

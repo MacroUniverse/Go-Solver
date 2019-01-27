@@ -12,6 +12,7 @@ private:
 	// m_x = -1: pass
 	// m_x = -2: edit board
 	// m_x = -3: game init (for initial node 0 with empty board)
+	// m_x = -4: game end
 	Char m_x, m_y; // coordinates or special codes
 
 public:
@@ -31,8 +32,6 @@ public:
 
 	Bool isedit() const; // if is an EDIT
 
-	Bool isinit() const; // if is an INIT
-
 	Char x() const; // x coordinate of PLACE
 
 	Char y() const; // y coordinate of PLACE
@@ -44,8 +43,6 @@ public:
 	void pass() { m_x = -1; } // pass
 
 	void edit() { m_x = -2; } // edit board
-
-	void init() { m_x = -3; } // init game
 
 	Char & x(); // x coordinate of PLACE
 
@@ -71,6 +68,8 @@ inline Move::Move(Act_I act)
 		m_x = -2;
 	else if (act == Act::INIT)
 		m_x = -3;
+	else if (act == Act::END)
+		m_x = -4;
 	else
 		error("illegal Act type!");
 }
@@ -93,11 +92,6 @@ inline Bool Move::ispass() const
 inline Bool Move::isedit() const
 {
 	return m_x == -2;
-}
-
-inline Bool Move::isinit() const
-{
-	return m_x == -3;
 }
 
 inline Char Move::x() const

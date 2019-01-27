@@ -1,27 +1,10 @@
 #pragma once
 #include "tree.h"
 
-Int Tree::solve(Long_I treeInd /*optional*/)
+Int Tree::solve(Long_I treeInd)
 {
-	Bool debug_stop = nnode() >= 137; // debug
-	static Bool save = false; // debug
-
-	static Bool auto_solve = false;
-	Int i, solve_ret;
-	MovRet move_ret;
-	const Long treeInd1 = def(treeInd);
-	Long child_treeInd;
-	Int child_sco2;
-	Sol child_sol;
-
-	// ko related
-	Bool has_ko_link = false, has_ko_child = false;
-	Int best_solvable_child_sco2 = -1;
-	Sol best_solvable_child_sol = Sol::BAD;
-	Int best_ko_child_sco2 = -1;
-	static Long auto_solve_treeInd = 1000000;
-
 	// trivially solved
+	const Long treeInd1 = def(treeInd);
 	if (solution(treeInd1) != Sol::UNKNOWN) {
 		if (solved(treeInd1)) {
 			// solved node
@@ -33,13 +16,32 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 		}
 	}
 
+	Bool debug_stop = nnode() >= 2000; // debug
+	static Bool save = false; // debug
+
+	static Bool auto_solve = false;
+	Int i, solve_ret;
+	MovRet move_ret;
+	
+	Long child_treeInd;
+	Int child_sco2;
+	Sol child_sol;
+
+	// ko related
+	Bool has_ko_link = false, has_ko_child = false;
+	Int best_solvable_child_sco2 = -1;
+	Sol best_solvable_child_sol = Sol::BAD;
+	Int best_ko_child_sco2 = -1;
+	static Long auto_solve_treeInd = 1000000;
+
 	// enumerate children
 	for (i = 0; i < 100000; ++i) {
-		debug_stop = nnode() >= 137;
+		// make a move
+		debug_stop = nnode() >= 2000;
 		if (i < node(treeInd1).nnext()) {
 			// check existing child
 			child_treeInd = node(treeInd1).next(i);
-			if (is_ko_node(child_treeInd)) {
+			if (is_ko_child(treeInd1, i)) {
 				// existing ko child
 				move_ret = MovRet::NEW_ND;
 			}
@@ -79,6 +81,7 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 			}
 		}
 
+		// made a move
 		if (save) { // debug
 			writeSGF("test.sgf");
 			save = false;
@@ -180,10 +183,6 @@ Int Tree::solve(Long_I treeInd /*optional*/)
 		else if (move_ret == MovRet::KO_LN || move_ret == MovRet::DB_PAS_KO_LN) {
 			Long child_treeInd = next(treeInd1, -1);
 			has_ko_link = true;
-			if (solved(child_treeInd) || check_clean_ko_node(child_treeInd) >= 0) {
-				// ko link target already solved
-				resolve_ko1(treeInd1, child_treeInd);
-			}
 			continue;
 		}
 		else if (move_ret == MovRet::ALL_EXIST) {

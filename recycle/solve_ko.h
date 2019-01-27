@@ -19,14 +19,7 @@ inline Int Tree::solve_ko(Long_I treeInd_from, Int_I forkInd)
 	Int i, ret;
 	Long treeInd_to = next(treeInd_from, forkInd);
 
-	// check clean ko node
-	if (check_clean_ko_node(treeInd_to) >= 0) {
-		// is a clean ko nod
-		return 2;
-	}
-
-	// shift ko links to curren node
-	shift_ko_links(treeInd_from, forkInd);
+	
 
 	// Now we can start solving!
 	ret = solve_ko0(treeInd_to);
