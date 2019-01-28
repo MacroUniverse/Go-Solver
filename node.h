@@ -40,16 +40,19 @@ public:
 
 	// link for a parent
 	// forkInd = -1 : last element, forkInd = -2 : second last element, etc.
-	Linkp_I last(Int_I forkInd = 0) const;
+	Linkp last(Int_I forkInd = 0) const;
 
 	Int nnext() const;
 
-	// find forkInd for m_last for a link
+	// find forkInd of m_last for a link
 	const Int last_forkInd(Linkp_I plink) const;
+
+	// find forkInd of m_next for a link
+	const Int next_forkInd(Linkp_I plink) const;
 
 	// link for a child
 	// forkInd = -1 : last element, forkInd = -2 : second last element, etc.
-	Linkp_I next(Int_I forkInd = 0) const;
+	Linkp next(Int_I forkInd = 0) const;
 
 	// set 0-th node (empty board)
 	void init();
@@ -62,17 +65,17 @@ public:
 
 	void set_solution(Sol_I sol);
 
-	void push_last(Linkp_I plink);
+	void push_last(Linkp plink);
 
-	void push_next(Linkp_I plink);
+	void push_next(Linkp plink);
 
 	void set(Who_I who, Long_I poolInd, Trans_I trans);
 
 	// change a next link
-	void set_next(Int_I forkInd, Linkp_I plink);
+	void set_next(Int_I forkInd, Linkp plink);
 
 	// change a last link
-	void set_last(Int_I forkInd, Linkp_I plink);
+	void set_last(Int_I forkInd, Linkp plink);
 
 	// remove one link from m_last
 	// will not deallocate link!
@@ -107,7 +110,7 @@ inline const Trans & Node::trans() const
 	return m_trans;
 }
 
-inline const Linkp_I Node::last(Int_I ind) const
+inline Linkp Node::last(Int_I ind) const
 {
 	Long treeInd;
 	if (ind < 0)
@@ -123,8 +126,8 @@ inline Int Node::nnext() const
 
 inline const Int Node::last_forkInd(Linkp_I plink) const
 {
-	Int i, Nlast = nlast();
-	for (i = 0; i < Nlast; ++i) {
+	Int i
+	for (i = 0; i < nlast(); ++i) {
 		if (last(i) == plink) {
 			return i;
 		}
@@ -133,7 +136,18 @@ inline const Int Node::last_forkInd(Linkp_I plink) const
 	return 1000000;
 }
 
-inline const Linkp_I Node::next(Int_I ind) const
+inline const Int Node::next_forkInd(Linkp_I plink) const
+{
+	for (i = 0; i < nnext(); ++i) {
+		if (next(i) == plink) {
+			return i;
+		}
+	}
+	error("parent not found");
+	return 1000000;
+}
+
+inline Linkp Node::next(Int_I ind) const
 {
 	Long treeInd;
 	if (ind < 0)
@@ -172,14 +186,14 @@ inline void Node::set_solution(Sol_I sol)
 	m_sol = sol;
 }
 
-inline void Node::push_last(Linkp_I plink)
+inline void Node::push_last(Linkp plink)
 {
-	m_last.push_back(link);
+	m_last.push_back(plink);
 }
 
-inline void Node::push_next(Linkp_I plink)
+inline void Node::push_next(Linkp plink)
 {
-	m_next.push_back(link);
+	m_next.push_back(plink);
 }
 
 inline void Node::set(Who_I who, Long_I poolInd, Trans_I trans)
@@ -187,14 +201,14 @@ inline void Node::set(Who_I who, Long_I poolInd, Trans_I trans)
 	m_who = who; m_poolInd = poolInd; m_trans = trans;
 }
 
-inline void Node::set_last(Int_I forkInd, Linkp_I plink)
+inline void Node::set_last(Int_I forkInd, Linkp plink)
 {
-	m_last[forkInd] = pLink;
+	m_last[forkInd] = plink;
 }
 
-inline void Node::set_next(Int_I forkInd, Linkp_I plink)
+inline void Node::set_next(Int_I forkInd, Linkp plink)
 {
-	m_next[forkInd] = pLink;
+	m_next[forkInd] = plink;
 }
 
 inline void Node::delete_last(Int_I forkInd)

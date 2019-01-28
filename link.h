@@ -78,6 +78,15 @@ public:
 	const Bool isend() const { return m_type == LnType::END; }
 	const Bool isko() const { return m_type == LnType::KO_S || m_type == LnType::KO_T; }
 	const Bool istrans() const { return m_type == LnType::TRANS || m_type == LnType::KO_T; }
+	virtual const Bool resolved() const
+	{
+		error("not a ko link!");
+	}
+	
+	virtual void resolve()
+	{
+		error("not a ko link!");
+	}
 };
 
 // simple link
@@ -91,7 +100,7 @@ public:
 
 	void convert(SKlinkp_I sklink)
 	{
-		link(sklink->from, sklink->to, sklink->move);
+		link(sklink->from(), sklink->to(), sklink->move());
 	}
 
 	void init()
@@ -109,8 +118,8 @@ public:
 		Link::link(LnType::SIMPLE, from, to, move);
 	}
 
-	friend Linkp_I ko_link_2_link(Linkp_I pLink);
-	friend Linkp_I link_2_ko_link(Linkp_I pLink);
+	friend Linkp ko_link_2_link(Linkp_I pLink);
+	friend Linkp link_2_ko_link(Linkp_I pLink);
 	friend class Tree;
 };
 
@@ -146,8 +155,8 @@ public:
 		m_trans = trans;
 	}
 
-	friend Linkp_I ko_link_2_link(Linkp_I pLink);
-	friend Linkp_I link_2_ko_link(Linkp_I pLink);
+	friend Linkp ko_link_2_link(Linkp_I pLink);
+	friend Linkp link_2_ko_link(Linkp_I pLink);
 	friend class Tree;
 };
 
@@ -172,13 +181,18 @@ public:
 		return m_reso;
 	}
 
+	void resolve()
+	{
+		m_reso = true;
+	}
+
 	void link(Long_I from, Long_I to, Move_I move)
 	{
 		Link::link(LnType::KO_S, from, to, move);
 	}
 
-	friend Linkp_I ko_link_2_link(Linkp_I pLink);
-	friend Linkp_I link_2_ko_link(Linkp_I pLink);
+	friend Linkp ko_link_2_link(Linkp_I pLink);
+	friend Linkp link_2_ko_link(Linkp_I pLink);
 	friend class Tree;
 };
 
@@ -204,17 +218,22 @@ public:
 		return m_reso;
 	}
 
+	void resolve()
+	{
+		m_reso = true;
+	}
+
 	void link(Long_I from, Long_I to, Move_I move, Trans_I trans)
 	{
 		Tlink::link(LnType::KO_T, from, to, move, trans);
 	}
 
-	friend Linkp_I ko_link_2_link(Linkp_I pLink);
-	friend Linkp_I link_2_ko_link(Linkp_I pLink);
+	friend Linkp ko_link_2_link(Linkp_I pLink);
+	friend Linkp link_2_ko_link(Linkp_I pLink);
 	friend class Tree;
 };
 
-inline Linkp_I ko_link_2_link(Linkp_I pLink)
+inline Linkp ko_link_2_link(Linkp_I pLink)
 {
 	if (pLink->type() == LnType::KO_S) {
 		Slink::m_links.emplace_back();
@@ -230,7 +249,7 @@ inline Linkp_I ko_link_2_link(Linkp_I pLink)
 		error("not a ko link");
 }
 
-inline Linkp_I link_2_ko_link(Linkp_I pLink)
+inline Linkp link_2_ko_link(Linkp_I pLink)
 {
 	if (pLink->type() == LnType::SIMPLE) {
 		SKlink::m_links.emplace_back();
