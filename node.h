@@ -45,10 +45,10 @@ public:
 	Int nnext() const;
 
 	// find forkInd of m_last for a link
-	const Int last_forkInd(Linkp plink) const;
+	const Int last_forkInd(Linkp_I plink) const;
 
 	// find forkInd of m_next for a link
-	const Int next_forkInd(Linkp plink) const;
+	const Int next_forkInd(Linkp_I plink) const;
 
 	// link for a child
 	// forkInd = -1 : last element, forkInd = -2 : second last element, etc.
@@ -72,10 +72,10 @@ public:
 	void set(Who_I who, Long_I poolInd, Trans_I trans);
 
 	// change a next link
-	void set_next(Int_I forkInd, Linkp plink);
+	void set_next(Int_I forkInd, Linkp_I plink);
 
 	// change a last link
-	void set_last(Int_I forkInd, Linkp plink);
+	void set_last(Int_I forkInd, Linkp_I plink);
 
 	// remove one link from m_last
 	// will not deallocate link!
@@ -124,7 +124,7 @@ inline Int Node::nnext() const
 	return m_next.size();
 }
 
-inline const Int Node::last_forkInd(Linkp plink) const
+inline const Int Node::last_forkInd(Linkp_I plink) const
 {
 	for (Int i = 0; i < nlast(); ++i) {
 		if (last(i) == plink) {
@@ -135,7 +135,7 @@ inline const Int Node::last_forkInd(Linkp plink) const
 	return 1000000;
 }
 
-inline const Int Node::next_forkInd(Linkp plink) const
+inline const Int Node::next_forkInd(Linkp_I plink) const
 {
 	for (Int i = 0; i < nnext(); ++i) {
 		if (next(i) == plink) {
@@ -190,7 +190,7 @@ inline void Node::set_solution(Sol_I sol)
 
 inline void Node::push_last(Linkp_I plink)
 {
-	m_next.push_back(plink);
+	m_last.push_back(plink);
 }
 
 inline void Node::push_next(Linkp_I plink)
@@ -203,22 +203,32 @@ inline void Node::set(Who_I who, Long_I poolInd, Trans_I trans)
 	m_who = who; m_poolInd = poolInd; m_trans = trans;
 }
 
-inline void Node::set_last(Int_I forkInd, Linkp plink)
+inline void Node::set_last(Int_I forkInd, Linkp_I plink)
 {
 	m_last[forkInd] = plink;
 }
 
-inline void Node::set_next(Int_I forkInd, Linkp plink)
+inline void Node::set_next(Int_I forkInd, Linkp_I plink)
 {
 	m_next[forkInd] = plink;
 }
 
 inline void Node::delete_last(Int_I forkInd)
 {
-	m_last.erase(m_last.begin() + forkInd);
+	if (forkInd < 0) {
+		m_last.erase(m_last.end() + forkInd);
+	}
+	else {
+		m_last.erase(m_last.begin() + forkInd);
+	}
 }
 
 inline void Node::delete_next(Int_I forkInd)
 {
-	m_next.erase(m_next.begin() + forkInd);
+	if (forkInd < 0) {
+		m_next.erase(m_next.end() + forkInd);
+	}
+	else {
+		m_next.erase(m_next.begin() + forkInd);
+	}
 }

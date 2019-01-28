@@ -142,7 +142,7 @@ public:
 			return ret; // illegal
 
 		// legal, update config
-		Trans trans = m_config.calc_trans();
+		Trans trans = m_config.calc_trans(m_trans);
 		m_config.transform(trans);
 		m_trans -= trans;
 		return 0;

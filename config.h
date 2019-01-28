@@ -148,7 +148,7 @@ public:
 	// return true: if needs to flip
 	// return false: if no need to flip
 	// output rot: times the board needs to rotate counter-clockwise
-	Trans calc_trans() const;
+	Trans calc_trans(Trans_I trans) const;
 
 	// get a stone after the board has been rotated and fliped
 	Who transform1(Char_I x, Char_I y, Trans_I trans) const;
@@ -219,7 +219,9 @@ inline void Config::disp() const
 	}
 }
 
-inline Trans Config::calc_trans() const
+// if there are multiple trans available,
+// use the one that makes trans2int(trans_ref - trans[i]) smallest
+inline Trans Config::calc_trans(Trans_I trans_ref) const
 {
 	Char x, y;
 	Int i, Nx = board_Nx(), Ny = board_Ny(), N = Nx * Ny, best;
@@ -275,8 +277,17 @@ inline Trans Config::calc_trans() const
 		}
 	}
 
-	// multiple rot/flip combinations, return the first
-	return trans[0];
+	// multiple rot/flip combinations
+	// return the one that makes trans2int(trans0 - trans[i]) smallest
+	Int num, min = 1000000, i_min;
+	for (i = 0; i < trans.size(); ++i) {
+		num = trans2int(trans_ref - trans[i]);
+		if (num < min) {
+			min = num;
+			i_min = i;
+		}
+	}
+	return trans[i_min];
 }
 
 inline Who Config::transform1(Char_I x, Char_I y, Trans_I trans) const

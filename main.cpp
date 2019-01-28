@@ -2,7 +2,7 @@
 #include "tree.h"
 
 // static member definitions
-vector<Link> Link::m_links;
+vector<Link> Linkp::m_links;
 
 int main()
 {

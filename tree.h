@@ -16,7 +16,7 @@ private:
 	Pool m_pool;
 
 	// unresolved ko links
-	vector<Link*> m_unreso_ko_links;
+	vector<Linkp> m_unreso_ko_links; // debug
 
 	// clean ko nodes
 	vector<Long> m_clean_ko_node;
@@ -81,7 +81,7 @@ public:
 	Linkp unlink(Long_I treeInd_from, Int_I forkInd);
 
 	// relink to nodes
-	void relink(Linkp plink);
+	void relink(Linkp_I plink);
 
 	// check if node(treeInd_from) is an upstream node of node(treeInd_to)
 	// ko links are ignored
@@ -138,7 +138,7 @@ public:
 	// ========= move related methods ==================
 
 
-	MovRet pass(Long_I treeInd);
+	MovRet pass(Long_O child_treeInd, Long_I treeInd);
 
 	// check if a placing is legal, or how many stones will be dead
 	// same check already exists for place()
@@ -155,7 +155,7 @@ public:
 	// return -1 if illegal (nothing changes)
 	// return -2 if a ko link is created
 	// already has bound checking
-	MovRet place(Char_I x, Char_I y, Long_I treeInd);
+	MovRet place(Long_O child_treeInd, Char_I x, Char_I y, Long_I treeInd);
 
 	// smarter random move for a node
 	// will not do a dumb move (dumb eye filling or dumb big eye filling)
@@ -167,11 +167,11 @@ public:
 	// return -1 if all legal moves already exists
 	// return -2 if passed and game ends
 	// return -3 if double pass not allowed and ko link created
-	MovRet rand_smart_move(Long_I treeInd);
+	MovRet rand_smart_move(Long_O child_treeInd, Long_I treeInd);
 
 	// prompt user for a move
 	// returns are the same as auto_smart_move()
-	MovRet prompt_move(Long_I treeInd);
+	MovRet prompt_move(Long_O child_treeInd, Long_I treeInd);
 
 	// randomly play to the end of the game from a node
 	// m_treeInd will be changed to the end node!
@@ -186,12 +186,12 @@ public:
 	inline void writeSGF(const string &name) const;
 
 	// internal function called by writeSGF()
-	inline void writeSGF0(VecBool &check, ofstream &fout, Long_I treeInd_from, Int_I forkInd) const;
+	inline void writeSGF0(VecBool &check, ofstream &fout, Long_I treeInd_from, Int_I forkInd, Trans_I trans) const;
 
 	// internal function called by writeSGF0()
-	inline void writeSGF01(ofstream &fout, Long_I treeInd_from, Int_I forkInd) const;
+	inline void writeSGF01(ofstream &fout, Long_I treeInd_from, Int_I forkInd, Trans_I trans) const;
 
-	inline void writeSGF0_link(ofstream &fout, Long_I treeInd_from, Int_I forkInd, const string &prefix) const;
+	inline void writeSGF0_link(ofstream &fout, Long_I treeInd_from, Int_I forkInd, const string &prefix, Trans_I trans) const;
 
 	// ======== solution related ============
 
@@ -358,7 +358,7 @@ inline void Tree::disp_board(Long_I treeInd) const
 	cout << '\n' << endl;
 };
 
-inline MovRet Tree::pass(Long_I treeInd)
+inline MovRet Tree::pass(Long_O child_treeInd, Long_I treeInd)
 {
 	Int i, ret;
 	Long ko_treeInd;
@@ -379,16 +379,17 @@ inline MovRet Tree::pass(Long_I treeInd)
 			}
 			else {
 				// game not ended, build a ko link
-				ko_treeInd = last(treeInd, i)->from();
+				child_treeInd = last(treeInd, i)->from();
 				Trans trans = lastNode(treeInd, i).trans() - node.trans();
 				if (is_one(trans)) {
-					link(LnType::KO_S, treeInd, ko_treeInd, Move(Act::PASS));
+					link(LnType::KO_S, treeInd, child_treeInd, Move(Act::PASS));
 				}
 				else {
-					link(LnType::KO_T, treeInd, ko_treeInd, Move(Act::PASS), trans);
+					link(LnType::KO_T, treeInd, child_treeInd, Move(Act::PASS), trans);
 				}
 				return MovRet::DB_PAS_KO_LN;
 			}
+			break;
 		}
 	}
 
@@ -401,23 +402,25 @@ inline MovRet Tree::pass(Long_I treeInd)
 		// configuration exists, new situation
 		m_nodes.emplace_back();
 		m_nodes.back().set(::next(who(treeInd)), m_pool.poolInd(orderInd), board.trans());
-		link(LnType::SIMPLE, treeInd, max_treeInd(), Move(Act::PASS));
-		m_pool.link(orderInd, ::next(who_config(treeInd)), max_treeInd());
+		child_treeInd = max_treeInd();
+		link(LnType::SIMPLE, treeInd, child_treeInd, Move(Act::PASS));
+		m_pool.link(orderInd, ::next(who_config(treeInd)), child_treeInd);
 		return MovRet::NEW_ND;
 	}
 	else if (ret == -1) {
 		// situation exists, not a ko
-		Trans trans = m_nodes[treeInd_found].trans() - node.trans();
+		child_treeInd = treeInd_found;
+		Trans trans = m_nodes[child_treeInd].trans() - node.trans();
 		if (is_one(trans)) {
-			link(LnType::SIMPLE, treeInd, treeInd_found, Move(Act::PASS));
+			link(LnType::SIMPLE, treeInd, child_treeInd, Move(Act::PASS));
 		}
 		else {
-			link(LnType::TRANS, treeInd, treeInd_found, Move(Act::PASS), trans);
+			link(LnType::TRANS, treeInd, child_treeInd, Move(Act::PASS), trans);
 		}
 			
-		if (is_ko_node(treeInd_found)) {
+		if (is_ko_node(child_treeInd)) {
 			// linked to a ko node
-			if (check_clean_ko_node(treeInd_found) >= 0) {
+			if (check_clean_ko_node(child_treeInd) >= 0) {
 				// linked to a clean ko node
 				return MovRet::LN_CLN_KO_ND;
 			}
@@ -433,12 +436,13 @@ inline MovRet Tree::pass(Long_I treeInd)
 	}
 	else if (ret == -2) {
 		// situation exists, is a ko
-		Trans trans = m_nodes[treeInd_found].trans() - node.trans();
+		child_treeInd = treeInd_found;
+		Trans trans = m_nodes[child_treeInd].trans() - node.trans();
 		if (is_one(trans)) {
-			link(LnType::KO_S, treeInd, treeInd_found, Move(Act::PASS));
+			link(LnType::KO_S, treeInd, child_treeInd, Move(Act::PASS));
 		}
 		else {
-			link(LnType::KO_T, treeInd, treeInd_found, Move(Act::PASS), trans);
+			link(LnType::KO_T, treeInd, child_treeInd, Move(Act::PASS), trans);
 		}
 		return MovRet::KO_LN;
 	}
@@ -459,7 +463,7 @@ inline Int Tree::check(Char_I x, Char_I y, Long_I treeInd)
 	return get_board(treeInd).check(x, y, ::next(who(treeInd)));
 }
 
-inline MovRet Tree::place(Char_I x, Char_I y, Long_I treeInd)
+inline MovRet Tree::place(Long_O child_treeInd, Char_I x, Char_I y, Long_I treeInd)
 {
 	Int ret;
 	Board board;
@@ -474,7 +478,8 @@ inline MovRet Tree::place(Char_I x, Char_I y, Long_I treeInd)
 		m_pool.push(board, 1, -1, Who::BLACK, 1);
 		m_nodes.emplace_back();
 		m_nodes.back().set(Who::BLACK, m_pool.size() - 1, board.trans());
-		link(LnType::SIMPLE ,treeInd, max_treeInd(), Move(x, y));
+		child_treeInd = max_treeInd();
+		link(LnType::SIMPLE ,treeInd, child_treeInd, Move(x, y));
 		return MovRet::NEW_ND;
 	}
 
@@ -488,9 +493,10 @@ inline MovRet Tree::place(Char_I x, Char_I y, Long_I treeInd)
 	Long treeInd_found;
 	ret = check_ko(search_ret, treeInd_found, orderInd, treeInd, board.config(), board.trans().flip());
 	if (ret < 0) { // board already exists
+		child_treeInd = treeInd_found;
 		if (ret == -1) {
 			// not a ko
-			Trans trans = m_nodes[treeInd_found].trans() - node.trans();
+			Trans trans = m_nodes[treeInd_found].trans() - board.trans();
 			if (is_one(trans)) {
 				link(LnType::SIMPLE, treeInd, treeInd_found, Move(x, y));
 			}
@@ -515,7 +521,7 @@ inline MovRet Tree::place(Char_I x, Char_I y, Long_I treeInd)
 		}
 		else if (ret == -2) {
 			// is a ko
-			Trans trans = m_nodes[treeInd_found].trans() - node.trans();
+			Trans trans = m_nodes[treeInd_found].trans() - board.trans();
 			if (is_one(trans)) {
 				link(LnType::KO_S, treeInd, treeInd_found, Move(x, y));
 			}
@@ -528,6 +534,7 @@ inline MovRet Tree::place(Char_I x, Char_I y, Long_I treeInd)
 
 	// new situation
 	m_nodes.emplace_back(); // add Node to tree
+	child_treeInd = max_treeInd();
 
 	if (ret == -3) {
 		// configuration exists
@@ -536,15 +543,15 @@ inline MovRet Tree::place(Char_I x, Char_I y, Long_I treeInd)
 			next_who_config = ::next(next_who);
 		else
 			next_who_config = next_who;
-		m_pool.link(orderInd, next_who_config, max_treeInd());
+		m_pool.link(orderInd, next_who_config, child_treeInd);
 		m_nodes.back().set(next_who, m_pool.poolInd(orderInd), board.trans());
 	}
 	else { // configuration does not exist
-		m_pool.push(board, search_ret, orderInd, next_who, max_treeInd());
+		m_pool.push(board, search_ret, orderInd, next_who, child_treeInd);
 		m_nodes.back().set(next_who, m_pool.size() - 1, board.trans());
 	}
 
-	link(LnType::SIMPLE, treeInd, max_treeInd(), Move(x, y));
+	link(LnType::SIMPLE, treeInd, child_treeInd, Move(x, y));
 	return MovRet::NEW_ND;
 }
 
@@ -554,6 +561,8 @@ inline void Tree::link(LnType_I type, Long_I treeInd_from, Long_I treeInd_to, Mo
 	plink->link(type, treeInd_from, treeInd_to, move);
 	m_nodes[treeInd_from].push_next(plink);
 	m_nodes[treeInd_to].push_last(plink);
+	if (type == LnType::KO_S)
+		m_unreso_ko_links.push_back(plink); // debug
 }
 
 inline void Tree::link(LnType_I type, Long_I treeInd_from, Long_I treeInd_to, Move_I move, Trans_I trans)
@@ -562,6 +571,8 @@ inline void Tree::link(LnType_I type, Long_I treeInd_from, Long_I treeInd_to, Mo
 	plink->link(type, treeInd_from, treeInd_to, move, trans);
 	m_nodes[treeInd_from].push_next(plink);
 	m_nodes[treeInd_to].push_last(plink);
+	if (type == LnType::KO_T)
+		m_unreso_ko_links.push_back(plink); // debug
 }
 
 inline Linkp Tree::unlink(Long_I treeInd_from, Int_I forkInd)
@@ -574,7 +585,7 @@ inline Linkp Tree::unlink(Long_I treeInd_from, Int_I forkInd)
 	return plink;
 }
 
-inline void Tree::relink(Linkp plink)
+inline void Tree::relink(Linkp_I plink)
 {
 	Node & node_from = m_nodes[plink->from()];
 	Node & node_to = m_nodes[plink->to()];
@@ -727,7 +738,7 @@ inline void Tree::writeSGF(const string &name) const
 
 	for (i = 0; i < m_nodes[0].nnext(); ++i) {
 		fout << '(';
-		writeSGF0(check, fout, 0, i);
+		writeSGF0(check, fout, 0, i, Trans());
 		fout << ')';
 	}
 	
@@ -741,15 +752,23 @@ inline void Tree::writeSGF(const string &name) const
 // return max node index written
 // nodes should be written in the order of treeIndex
 // recursively write the tree
-inline void Tree::writeSGF0(VecBool &check, ofstream &fout, Long_I treeInd_from, Int_I forkInd) const
+inline void Tree::writeSGF0(VecBool &check, ofstream &fout, Long_I treeInd_from, Int_I forkInd, Trans_I trans0) const
 {
 	using slisc::lookupInt;
 	Int i, nnext;
 	Long treeInd;
 	Linkp plink;
+	Trans trans = trans0;
+
+	// check trans link
+	plink = next(treeInd_from, forkInd);
 
 	// write one node
-	writeSGF01(fout, treeInd_from, forkInd);
+	writeSGF01(fout, treeInd_from, forkInd, trans);
+	if (plink->istrans()) {
+		trans -= plink->trans();
+	}
+
 	treeInd = next(treeInd_from, forkInd)->to();
 	check[treeInd] = true;
 
@@ -764,16 +783,19 @@ inline void Tree::writeSGF0(VecBool &check, ofstream &fout, Long_I treeInd_from,
 			plink = next(treeInd, 0);
 			if (plink->isko()) {
 				// ko link
-				writeSGF0_link(fout, treeInd, 0, "ko>");
+				writeSGF0_link(fout, treeInd, 0, "ko>", trans);
 				return;
 			}
 			if (check[plink->to()]) {
 				// normal link
-				writeSGF0_link(fout, treeInd, 0, ">"); // write a node to represent a link
+				writeSGF0_link(fout, treeInd, 0, ">", trans); // write a node to represent a link
 				return;
 			}
 			// a child
-			writeSGF01(fout, treeInd, 0);
+			writeSGF01(fout, treeInd, 0, trans);
+			if (plink->istrans()) {
+				trans -= plink->trans();
+			}
 			check[plink->to()] = true;
 			treeInd = plink->to();
 		}
@@ -791,25 +813,30 @@ inline void Tree::writeSGF0(VecBool &check, ofstream &fout, Long_I treeInd_from,
 			error("unkown error!");
 		plink = next(treeInd, i);
 		if (plink->isko()) {
-			writeSGF0_link(fout, treeInd, i, "ko>"); // write a node to represent a link
+			writeSGF0_link(fout, treeInd, i, "ko>", trans); // write a node to represent a link
 		}
 		else if (check[plink->to()]) { // reached a link to an existing node
-			writeSGF0_link(fout, treeInd, i, ">"); // write a node to represent a link
+			writeSGF0_link(fout, treeInd, i, ">", trans); // write a node to represent a link
 		}
 		else
-			writeSGF0(check, fout, treeInd, i); // normal node
+			writeSGF0(check, fout, treeInd, i, trans); // normal node
 		fout << ')';
 	}
 	return;
 }
 
 // write one node to SGF file
-inline void Tree::writeSGF01(ofstream &fout, Long_I treeInd_from, Int_I forkInd) const
+inline void Tree::writeSGF01(ofstream &fout, Long_I treeInd_from, Int_I forkInd, Trans_I trans) const
 {
-	Char BW; // letter B or letter W
-	Who who = ::next(Tree::who(treeInd_from));
+	Char BW, x, y; // letter B or letter W
+	Who who;
 	Linkp plink = next(treeInd_from, forkInd);
 	Long treeInd = plink->to();
+
+	if (trans.flip())
+		who = Tree::who(treeInd_from);
+	else
+		who = ::next(Tree::who(treeInd_from));
 
 	if (who == Who::BLACK)
 		BW = 'B';
@@ -821,8 +848,11 @@ inline void Tree::writeSGF01(ofstream &fout, Long_I treeInd_from, Int_I forkInd)
 	fout << ";" << BW;
 	if (plink->ispass()) // pass
 		fout << "[]";
-	else
-		fout << '[' << char('a' + plink->x()) << char('a' + plink->y()) << "]";
+	else {
+		x = plink->x(); y = plink->y();
+		transf(x, y, trans.rot());
+		fout << '[' << char('a' + x) << char('a' + y) << "]";
+	}
 
 	// add node number to title
 	fout << "N[" << "[" << treeInd << "\\]";
@@ -851,14 +881,20 @@ inline void Tree::writeSGF01(ofstream &fout, Long_I treeInd_from, Int_I forkInd)
 	fout << "\n";
 }
 
-inline void Tree::writeSGF0_link(ofstream &fout, Long_I treeInd_from, Int_I forkInd, const string &prefix) const
+inline void Tree::writeSGF0_link(ofstream &fout, Long_I treeInd_from, Int_I forkInd, const string &prefix, Trans_I trans) const
 {
-	Char BW; // letter B or letter W
+	Char BW, x, y; // letter B or letter W
 	const Node & node_from = m_nodes[treeInd_from];
 	Int i, nnext;
-	Who who = ::next(node_from.who());
+	Who who;
 	Linkp plink = next(treeInd_from, forkInd);
 	Long treeInd_to = plink->to();
+
+	if (trans.flip())
+		who = node_from.who();
+	else
+		who = ::next(node_from.who());
+
 	if (who == Who::BLACK)
 		BW = 'B';
 	else if (who == Who::WHITE)
@@ -869,8 +905,11 @@ inline void Tree::writeSGF0_link(ofstream &fout, Long_I treeInd_from, Int_I fork
 	fout << ";" << BW;
 	if (plink->ispass()) // pass
 		fout << "[]";
-	else
-		fout << '[' << char('a' + plink->x()) << char('a' + plink->y()) << "]";
+	else {
+		x = plink->x(); y = plink->y();
+		transf(x, y, trans.rot());
+		fout << '[' << char('a' + x) << char('a' + y) << "]";
+	}
 
 	// add node number to title
 	fout << "N[" << prefix << "[" << treeInd_to << "\\]";
@@ -925,7 +964,7 @@ inline Bool Tree::is_ko_child(Long_I treeInd, Int_I forkInd) const
 	return !pLink->isko() && next_node.is_ko_node();
 }
 
-inline MovRet Tree::prompt_move(Long_I treeInd)
+inline MovRet Tree::prompt_move(Long_O child_treeInd, Long_I treeInd)
 {
 	Int i;
 	MovRet ret;
@@ -945,7 +984,7 @@ inline MovRet Tree::prompt_move(Long_I treeInd)
 				cout << "try again!" << endl;
 				continue;
 			}
-			return pass(treeInd);
+			return pass(child_treeInd, treeInd);
 		}
 		else {
 			// make a move
@@ -969,7 +1008,7 @@ inline MovRet Tree::prompt_move(Long_I treeInd)
 				cout << "dumb 2-eye filling, try again!" << endl;
 			}			
 			
-			ret = place(x, y, treeInd);
+			ret = place(child_treeInd, x, y, treeInd);
 
 			if (ret == MovRet::ILLEGAL) {
 				cout << "illegal move, try again!" << endl;
@@ -989,7 +1028,7 @@ inline MovRet Tree::prompt_move(Long_I treeInd)
 	return MovRet::ILLEGAL;
 }
 
-inline MovRet Tree::rand_smart_move(Long_I treeInd)
+inline MovRet Tree::rand_smart_move(Long_O child_treeInd, Long_I treeInd)
 {
 	Bool exist, exist_pass = false;
 	Int i, j, Nx = board_Nx(), Ny = board_Ny(), Nxy = Nx*Ny;
@@ -1009,7 +1048,7 @@ inline MovRet Tree::rand_smart_move(Long_I treeInd)
 		if (nextMove_exist(Move(x, y), treeInd))
 			continue;
 		// check legal and number of removal
-		ret = place(x, y, treeInd);
+		ret = place(child_treeInd, x, y, treeInd);
 		if (ret == MovRet::ILLEGAL)
 			continue; // illegal move, no change
 		return ret;
@@ -1035,7 +1074,7 @@ inline MovRet Tree::rand_smart_move(Long_I treeInd)
 			continue;
 		}
 
-		ret = place(x, y, treeInd);
+		ret = place(child_treeInd, x, y, treeInd);
 		if (ret == MovRet::ILLEGAL)
 			error("impossible!");
 		return ret;
@@ -1043,17 +1082,18 @@ inline MovRet Tree::rand_smart_move(Long_I treeInd)
 
 	// no non-dumb placing left, consider passing
 	if (!nextMove_exist(Move(Act::PASS), treeInd)) {
-		return pass(treeInd);
+		return pass(child_treeInd, treeInd);
 	}
 
 	// all leagl moves already exist
 	return MovRet::ALL_EXIST;
 }
 
-inline Int Tree::rand_game(Long_I treeInd, Bool_I out)
+inline Int Tree::rand_game(Long_I treeInd0, Bool_I out)
 {
 	Int i;
 	MovRet ret;
+	Long treeInd = treeInd0, child_treeInd;
 
 	// debug: edit board here
 	/*tree.place(0, 0); tree.place(1, 2);
@@ -1066,7 +1106,7 @@ inline Int Tree::rand_game(Long_I treeInd, Bool_I out)
 	if (out) disp_board(treeInd);
 
 	for (i = 1; i < 10000; ++i) {
-		ret = rand_smart_move(treeInd);
+		ret = rand_smart_move(child_treeInd, treeInd);
 		if (ret == MovRet::ALL_EXIST) {
 			if (out) cout << "all moves exists\n\n\n";
 			break;
@@ -1077,6 +1117,7 @@ inline Int Tree::rand_game(Long_I treeInd, Bool_I out)
 		}
 		if (out) cout << "step " << i << endl;
 		if (out) disp_board(treeInd);
+		treeInd = child_treeInd;
 	}
 
 	if (out) cout << "game over!" << "\n\n";
@@ -1103,10 +1144,12 @@ inline Int Tree::resolve_ko(Long_I treeInd_to)
 {
 	Int i, j, Nko = m_unreso_ko_links.size();
 	Node &node = m_nodes[treeInd_to];
+	Linkp plink;
 	for (i = node.nlast() - 1; i >= 0; --i) {
-		if (node.last(i)->isko()) {
-			node.last(i)->resolve();
-			resolve_ko_record(node.last(i)->from(), treeInd_to);
+		plink = node.last(i);
+		if (plink->isko()) {
+			plink->resolve();
+			resolve_ko_record(plink->from(), treeInd_to);
 			--Nko;
 		}
 	}
@@ -1131,7 +1174,7 @@ inline Int Tree::shift_ko_links(Long_I treeInd_from, Int_I forkInd)
 	Long treeInd = next(treeInd_from, forkInd)->to();
 	Node & node = m_nodes[treeInd];
 	vector<Linkp> plinks;
-	Linkp plink = unlink(treeInd_from, forkInd);
+	Linkp plink, plink_save = unlink(treeInd_from, forkInd);
 
 	// ko links from downstream to upstream converts to normal links
 	ko_links(plinks, treeInd);
@@ -1144,12 +1187,14 @@ inline Int Tree::shift_ko_links(Long_I treeInd_from, Int_I forkInd)
 	// change all parents as descendents with a ko link
 	if (count > 0) {
 		for (i = node.nlast() - 1; i >= 0; --i) {
-			if (!node.last(i)->isko()) {
-				node.last(i)->link_2_ko_link();
+			plink = node.last(i);
+			if (!plink->isko()) {
+				plink->link_2_ko_link();
+				m_unreso_ko_links.push_back(plink);
 			}
 		}
 	}
-	relink(plink);
+	relink(plink_save);
 	return count;
 }
 

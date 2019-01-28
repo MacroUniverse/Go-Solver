@@ -15,7 +15,7 @@ Int Tree::solve(Long_I treeInd)
 		}
 	}
 
-	Bool debug_stop = nnode() >= 10; // debug
+	Bool debug_stop = nnode() >= 2000; // debug
 	static Bool save = false; // debug
 
 	static Bool auto_solve = false;
@@ -36,7 +36,7 @@ Int Tree::solve(Long_I treeInd)
 	// enumerate children
 	for (i = 0; i < 100000; ++i) {
 		// make a move
-		debug_stop = nnode() >= 10;
+		debug_stop = nnode() >= 2000;
 		if (i < m_nodes[treeInd].nnext()) {
 			// check existing child
 			child_treeInd = m_nodes[treeInd].next(i)->to();
@@ -56,9 +56,8 @@ Int Tree::solve(Long_I treeInd)
 		else {
 			// look for a new child (all existing children checked)
 			// prompt_move() or rand_smart_move
-			child_treeInd = -1;
 			if (treeInd >= auto_solve_treeInd) {
-				move_ret = rand_smart_move(treeInd);
+				move_ret = rand_smart_move(child_treeInd, treeInd);
 			}
 			else {
 				if (auto_solve) {
@@ -73,10 +72,10 @@ Int Tree::solve(Long_I treeInd)
 
 				if (auto_solve) {
 					auto_solve_treeInd = treeInd;
-					move_ret = rand_smart_move(treeInd);
+					move_ret = rand_smart_move(child_treeInd, treeInd);
 				}
 				else
-					move_ret = prompt_move(treeInd);
+					move_ret = prompt_move(child_treeInd, treeInd);
 			}
 		}
 
@@ -89,9 +88,7 @@ Int Tree::solve(Long_I treeInd)
 		if (move_ret == MovRet::NEW_ND || move_ret == MovRet::LN_NKO_ND
 			|| move_ret == MovRet::LN_CLN_KO_ND || move_ret == MovRet::LN_UCLN_KO_ND) {
 
-			if (child_treeInd < 0) {
-				child_treeInd = next(treeInd, -1)->to();
-			}
+			Linkp plink = next(treeInd, -1);
 
 			// debug, display board
 			if (move_ret == MovRet::NEW_ND) {

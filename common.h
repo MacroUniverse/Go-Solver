@@ -266,7 +266,7 @@ inline void transf(Char_IO x, Char_IO y, Int_I rot)
 }
 
 // transform coordinates and who
-inline void transf(Char_IO x, Char_IO y, Who_O who, Trans trans)
+inline void transf(Char_IO x, Char_IO y, Who_O who, Trans_I trans)
 {
 	Char temp, xmax = board_Nx() - 1, ymax = board_Ny() - 1;
 	if (trans.rot() == 1) {
@@ -312,6 +312,12 @@ inline void inv_transf(Char_IO x, Char_IO y, Who_O who, Trans trans)
 	}
 	if (trans.flip())
 		who = next(who);
+}
+
+// convert from trans to an unique integer
+Int trans2int(Trans_I trans)
+{
+	return 2*trans.rot() + trans.flip();
 }
 
 // if a transform does nothing
