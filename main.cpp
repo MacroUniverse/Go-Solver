@@ -1,6 +1,9 @@
 //#include "ui.h"
 #include "tree.h"
 
+// static member definitions
+vector<Link> Link::m_links;
+
 int main()
 {
 	// computer_vs_computer_ui();

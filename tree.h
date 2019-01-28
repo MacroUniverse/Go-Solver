@@ -23,8 +23,10 @@ private:
 	vector<Int> m_clean_ko_node_sco2;
 	vector<Sol> m_clean_ko_node_sol;
 
-public:
+	// links
+	vector<Link> m_links;
 
+public:
 	// input
 	slisc::Input inp;
 
@@ -69,17 +71,11 @@ public:
 
 	inline Bool isend(Long_I treeInd) const; // if a node is an end node
 
-	// create simple link
-	void slink(Long_I treeInd_from, Long_I treeInd_to, Move_I move);
-	
-	// create trans link
-	void tlink(Long_I treeInd_from, Long_I treeInd_to, Move_I move, Trans_I trans);
-
 	// create simple ko link
-	void sklink(Long_I treeInd_from, Long_I treeInd_to, Move_I move);
+	void link(LnType_I type, Long_I treeInd_from, Long_I treeInd_to, Move_I move);
 
 	// create trans ko link
-	void tklink(Long_I treeInd_from, Long_I treeInd_to, Move_I move, Trans_I trans);
+	void link(LnType_I type, Long_I treeInd_from, Long_I treeInd_to, Move_I move, Trans_I trans);
 
 	// unlink two nodes
 	Linkp unlink(Long_I treeInd_from, Int_I forkInd);
@@ -110,15 +106,9 @@ public:
 	Int check_ko(Int_O search_ret, Long_O treeInd_match, Long_O orderInd,
 		Long_I treeInd, Config_I config, Bool_I flip) const;
 
-	// change a ko link to normal link
-	void ko_link_2_link(Linkp_I plink);
-
-	// change a normal link to ko link
-	void link_2_ko_link(Linkp_I plink);
-
 	// find all downstream ko links of a node through ko children
 	// this is a recursive function
-	void ko_links(vector<Link*> & pLinks, Long_I treeInd) const;
+	void ko_links(vector<Linkp> & pLinks, Long_I treeInd) const;
 
 	// push a clean ko node to record
 	void push_clean_ko_node(Long_I treeInd1);
@@ -392,10 +382,10 @@ inline MovRet Tree::pass(Long_I treeInd)
 				ko_treeInd = last(treeInd, i)->from();
 				Trans trans = lastNode(treeInd, i).trans() - node.trans();
 				if (is_one(trans)) {
-					sklink(treeInd, ko_treeInd, Move(Act::PASS));
+					link(LnType::KO_S, treeInd, ko_treeInd, Move(Act::PASS));
 				}
 				else {
-					tklink(treeInd, ko_treeInd, Move(Act::PASS), trans);
+					link(LnType::KO_T, treeInd, ko_treeInd, Move(Act::PASS), trans);
 				}
 				return MovRet::DB_PAS_KO_LN;
 			}
@@ -411,7 +401,7 @@ inline MovRet Tree::pass(Long_I treeInd)
 		// configuration exists, new situation
 		m_nodes.emplace_back();
 		m_nodes.back().set(::next(who(treeInd)), m_pool.poolInd(orderInd), board.trans());
-		slink(treeInd, max_treeInd(), Move(Act::PASS));
+		link(LnType::SIMPLE, treeInd, max_treeInd(), Move(Act::PASS));
 		m_pool.link(orderInd, ::next(who_config(treeInd)), max_treeInd());
 		return MovRet::NEW_ND;
 	}
@@ -419,10 +409,10 @@ inline MovRet Tree::pass(Long_I treeInd)
 		// situation exists, not a ko
 		Trans trans = m_nodes[treeInd_found].trans() - node.trans();
 		if (is_one(trans)) {
-			slink(treeInd, treeInd_found, Move(Act::PASS));
+			link(LnType::SIMPLE, treeInd, treeInd_found, Move(Act::PASS));
 		}
 		else {
-			tlink(treeInd, treeInd_found, Move(Act::PASS), trans);
+			link(LnType::TRANS, treeInd, treeInd_found, Move(Act::PASS), trans);
 		}
 			
 		if (is_ko_node(treeInd_found)) {
@@ -445,10 +435,10 @@ inline MovRet Tree::pass(Long_I treeInd)
 		// situation exists, is a ko
 		Trans trans = m_nodes[treeInd_found].trans() - node.trans();
 		if (is_one(trans)) {
-			sklink(treeInd, treeInd_found, Move(Act::PASS));
+			link(LnType::KO_S, treeInd, treeInd_found, Move(Act::PASS));
 		}
 		else {
-			tklink(treeInd, treeInd_found, Move(Act::PASS), trans);
+			link(LnType::KO_T, treeInd, treeInd_found, Move(Act::PASS), trans);
 		}
 		return MovRet::KO_LN;
 	}
@@ -484,7 +474,7 @@ inline MovRet Tree::place(Char_I x, Char_I y, Long_I treeInd)
 		m_pool.push(board, 1, -1, Who::BLACK, 1);
 		m_nodes.emplace_back();
 		m_nodes.back().set(Who::BLACK, m_pool.size() - 1, board.trans());
-		slink(treeInd, max_treeInd(), Move(x, y));
+		link(LnType::SIMPLE ,treeInd, max_treeInd(), Move(x, y));
 		return MovRet::NEW_ND;
 	}
 
@@ -502,10 +492,10 @@ inline MovRet Tree::place(Char_I x, Char_I y, Long_I treeInd)
 			// not a ko
 			Trans trans = m_nodes[treeInd_found].trans() - node.trans();
 			if (is_one(trans)) {
-				slink(treeInd, treeInd_found, Move(x, y));
+				link(LnType::SIMPLE, treeInd, treeInd_found, Move(x, y));
 			}
 			else {
-				tlink(treeInd, treeInd_found, Move(x, y), trans);
+				link(LnType::TRANS, treeInd, treeInd_found, Move(x, y), trans);
 			}
 			if (is_ko_node(treeInd_found)) {
 				// linked to a ko node
@@ -527,10 +517,10 @@ inline MovRet Tree::place(Char_I x, Char_I y, Long_I treeInd)
 			// is a ko
 			Trans trans = m_nodes[treeInd_found].trans() - node.trans();
 			if (is_one(trans)) {
-				sklink(treeInd, treeInd_found, Move(x, y));
+				link(LnType::KO_S, treeInd, treeInd_found, Move(x, y));
 			}
 			else {
-				tklink(treeInd, treeInd_found, Move(x, y), trans);
+				link(LnType::KO_T, treeInd, treeInd_found, Move(x, y), trans);
 			}
 			return MovRet::KO_LN;
 		}
@@ -554,44 +544,24 @@ inline MovRet Tree::place(Char_I x, Char_I y, Long_I treeInd)
 		m_nodes.back().set(next_who, m_pool.size() - 1, board.trans());
 	}
 
-	slink(treeInd, max_treeInd(), Move(x, y));
+	link(LnType::SIMPLE, treeInd, max_treeInd(), Move(x, y));
 	return MovRet::NEW_ND;
 }
 
-inline void Tree::slink(Long_I treeInd_from, Long_I treeInd_to, Move_I move)
+inline void Tree::link(LnType_I type, Long_I treeInd_from, Long_I treeInd_to, Move_I move)
 {
-	Slink::m_links.emplace_back();
-	Slinkp pSlink = &Slink::m_links.back();
-	pSlink->link(treeInd_from, treeInd_to, move);
-	m_nodes[treeInd_from].push_next(pSlink);
-	m_nodes[treeInd_to].push_last(pSlink);
+	Linkp plink = Linkp::newlink();
+	plink->link(type, treeInd_from, treeInd_to, move);
+	m_nodes[treeInd_from].push_next(plink);
+	m_nodes[treeInd_to].push_last(plink);
 }
 
-inline void Tree::tlink(Long_I treeInd_from, Long_I treeInd_to, Move_I move, Trans_I trans)
+inline void Tree::link(LnType_I type, Long_I treeInd_from, Long_I treeInd_to, Move_I move, Trans_I trans)
 {
-	Tlink::m_links.emplace_back();
-	Tlinkp pSlink = &Tlink::m_links.back();
-	pSlink->link(treeInd_from, treeInd_to, move, trans);
-	m_nodes[treeInd_from].push_next(pSlink);
-	m_nodes[treeInd_to].push_last(pSlink);
-}
-
-inline void Tree::sklink(Long_I treeInd_from, Long_I treeInd_to, Move_I move)
-{
-	SKlink::m_links.emplace_back();
-	SKlinkp pSKlink = &SKlink::m_links.back();
-	pSKlink->link(treeInd_from, treeInd_to, move);
-	m_nodes[treeInd_from].push_next(pSKlink);
-	m_nodes[treeInd_to].push_last(pSKlink);
-}
-
-inline void Tree::tklink(Long_I treeInd_from, Long_I treeInd_to, Move_I move, Trans_I trans)
-{
-	TKlink::m_links.emplace_back();
-	TKlinkp pTKlink = &TKlink::m_links.back();
-	pTKlink->link(treeInd_from, treeInd_to, move, trans);
-	m_nodes[treeInd_from].push_next(pTKlink);
-	m_nodes[treeInd_to].push_last(pTKlink);
+	Linkp plink = Linkp::newlink();
+	plink->link(type, treeInd_from, treeInd_to, move, trans);
+	m_nodes[treeInd_from].push_next(plink);
+	m_nodes[treeInd_to].push_last(plink);
 }
 
 inline Linkp Tree::unlink(Long_I treeInd_from, Int_I forkInd)
@@ -665,24 +635,6 @@ inline Int Tree::check_ko(Int_O search_ret, Long_O treeInd_match, Long_O orderIn
 	}
 	poolInd = -1;
 	return 0;
-}
-
-inline void Tree::ko_link_2_link(Linkp_I plink)
-{
-	Node & node_from = m_nodes[plink->from()];
-	Node & node_to = m_nodes[plink->to()];
-	Linkp new_link = ::ko_link_2_link(plink);
-	node_from.set_next(node_from.next_forkInd(plink), new_link);
-	node_to.set_last(node_to.last_forkInd(plink), new_link);
-}
-
-inline void Tree::link_2_ko_link(Linkp_I plink)
-{
-	Node & node_from = m_nodes[plink->from()];
-	Node & node_to = m_nodes[plink->to()];
-	Linkp new_link = ::ko_link_2_link(plink);
-	node_from.set_next(node_from.next_forkInd(plink), new_link);
-	node_to.set_last(node_to.last_forkInd(plink), new_link);
 }
 
 inline void Tree::push_clean_ko_node(Long_I treeInd1)
@@ -771,9 +723,7 @@ inline void Tree::writeSGF(const string &name) const
 		fout << "SZ[" << Int(Nx) << "]";
 	else
 		fout << "SZ[" << Int(Nx) << ":" << Int(Ny) << "]";
-	fout << "DT[]\n";
-
-	fout.flush(); // debug
+	fout << "DT[]" << endl;
 
 	for (i = 0; i < m_nodes[0].nnext(); ++i) {
 		fout << '(';
@@ -907,7 +857,7 @@ inline void Tree::writeSGF0_link(ofstream &fout, Long_I treeInd_from, Int_I fork
 	const Node & node_from = m_nodes[treeInd_from];
 	Int i, nnext;
 	Who who = ::next(node_from.who());
-	Linkp_I plink = next(treeInd_from, forkInd);
+	Linkp plink = next(treeInd_from, forkInd);
 	Long treeInd_to = plink->to();
 	if (who == Who::BLACK)
 		BW = 'B';
@@ -965,12 +915,12 @@ inline Bool Tree::nextMove_exist(Move mov, Long_I treeInd) const
 
 inline Bool Tree::is_ko_node(Long_I treeInd) const
 {
-	m_nodes[treeInd].is_ko_node();
+	return m_nodes[treeInd].is_ko_node();
 }
 
 inline Bool Tree::is_ko_child(Long_I treeInd, Int_I forkInd) const
 {
-	Linkp_I pLink = next(treeInd, forkInd);
+	Linkp pLink = next(treeInd, forkInd);
 	const Node & next_node = m_nodes[pLink->to()];
 	return !pLink->isko() && next_node.is_ko_node();
 }
@@ -1187,15 +1137,15 @@ inline Int Tree::shift_ko_links(Long_I treeInd_from, Int_I forkInd)
 	ko_links(plinks, treeInd);
 	for (i = plinks.size() - 1; i >= 0; --i) {
 		if (islinked(plinks[i]->to(), treeInd) == 1 && plinks[i]->resolved()) {
-			ko_link_2_link(plinks[i]);
+			plinks[i]->ko_link_2_link();
 			++count;
 		}
 	}
 	// change all parents as descendents with a ko link
-	if (check) {
+	if (count > 0) {
 		for (i = node.nlast() - 1; i >= 0; --i) {
 			if (!node.last(i)->isko()) {
-				link_2_ko_link(node.last(i));
+				node.last(i)->link_2_ko_link();
 			}
 		}
 	}

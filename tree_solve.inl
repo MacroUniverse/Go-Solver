@@ -15,7 +15,7 @@ Int Tree::solve(Long_I treeInd)
 		}
 	}
 
-	Bool debug_stop = nnode() >= 2000; // debug
+	Bool debug_stop = nnode() >= 10; // debug
 	static Bool save = false; // debug
 
 	static Bool auto_solve = false;
@@ -36,7 +36,7 @@ Int Tree::solve(Long_I treeInd)
 	// enumerate children
 	for (i = 0; i < 100000; ++i) {
 		// make a move
-		debug_stop = nnode() >= 2000;
+		debug_stop = nnode() >= 10;
 		if (i < m_nodes[treeInd].nnext()) {
 			// check existing child
 			child_treeInd = m_nodes[treeInd].next(i)->to();

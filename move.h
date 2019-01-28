@@ -38,6 +38,10 @@ public:
 
 	// === none-const functions ===
 	
+	void init() { m_x = -3; }
+
+	void end() { m_x = -4; }
+
 	void place(Char_I x, Char_I y); // place a stone
 
 	void pass() { m_x = -1; } // pass

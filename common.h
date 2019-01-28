@@ -333,6 +333,7 @@ inline Trans operator-(Trans_I trans1, Trans_I trans2)
 	Trans trans;
 	trans.set_rot(mod(trans1.rot() - trans2.rot(), 4));
 	trans.set_flip(trans1.flip() != trans2.flip());
+	return trans;
 }
 
 // calculate trans1 -= trans2

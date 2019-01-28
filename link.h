@@ -21,246 +21,195 @@ class Link;
 typedef const Link &Link_I;
 typedef Link &Link_O, &Link_IO;
 
-typedef Link *Linkp;
-typedef const Link *const Linkp_I;
+class Linkp;
+typedef const Linkp Linkp_I;
+typedef Linkp &Linkp_O, &Linkp_IO;
 
-class Slink;
-typedef const Slink &Slink_I;
-typedef Slink &Slink_O, &Slink_IO;
+inline Bool istrans(LnType_I type)
+{
+	return type == LnType::TRANS || type == LnType::KO_T;
+}
 
-typedef Slink *Slinkp;
-typedef const Slink *const Slinkp_I;
-
-class Tlink;
-typedef const Tlink &Tlink_I;
-typedef Tlink &Tlink_O, &Tlink_IO;
-
-typedef Tlink *Tlinkp;
-typedef const Tlink *const Tlinkp_I;
-
-class SKlink;
-typedef const SKlink &SKlink_I;
-typedef SKlink &SKlink_O, &SKlink_IO;
-
-typedef SKlink *SKlinkp;
-typedef const SKlink *const SKlinkp_I;
-
-class TKlink;
-typedef const TKlink &TKlink_I;
-typedef TKlink &TKlink_O, &TKlink_IO;
-
-typedef TKlink *TKlinkp;
-typedef const TKlink *const TKlinkp_I;
+inline Bool isko(LnType_I type)
+{
+	return type == LnType::KO_S || type == LnType::KO_T;
+}
 
 // short link
 class Link : public Move
 {
 protected:
+	// basic members
 	LnType m_type; // link type
 	Long m_from; // tree index of source node
 	Long m_to; // tree index of target node
 
+	// other members
+	Trans m_trans; // transformation
+	Bool m_reso; // if ko links is resolved
+
 public:
-	Link() {}
-	void link(LnType_I type, Long_I from, Long_I to, Move_I move)
-	{
-		m_type = type;
-		m_from = from;
-		m_to = to;
-		Move::operator=(move);
-	}
-	Linkp_I const ptr() const { return this; }
+
+	Link(): m_reso(false) {}
+
 	const LnType &type() const { return m_type; }
 	const Long &from() const { return m_from; }
 	const Long &to() const { return m_to; }
 	const Move &move() const { return *this; }
 	const Bool isinit() const { return m_type == LnType::INIT; }
 	const Bool isend() const { return m_type == LnType::END; }
-	const Bool isko() const { return m_type == LnType::KO_S || m_type == LnType::KO_T; }
-	const Bool istrans() const { return m_type == LnType::TRANS || m_type == LnType::KO_T; }
-	virtual const Bool resolved() const
-	{
-		error("not a ko link!");
-	}
+	const Bool isko() const { return ::isko(m_type); }
+	const Bool istrans() const { return ::istrans(m_type); }
 	
-	virtual void resolve()
+	void link(LnType_I type, Long_I from, Long_I to, Move_I move)
 	{
-		error("not a ko link!");
-	}
-};
-
-// simple link
-class Slink : public Link
-{
-protected:
-	static vector<Slink> m_links;
-
-public:
-	Slink() {}
-
-	void convert(SKlinkp_I sklink)
-	{
-		link(sklink->from(), sklink->to(), sklink->move());
-	}
-
-	void init()
-	{
-		Link::link(LnType::INIT, -1, 0, Move(Act::INIT));
-	}
-
-	void end(Long_I treeInd)
-	{
-		Link::link(LnType::END, treeInd, -1, Move(Act::END));
-	}
-
-	void link(Long_I from, Long_I to, Move_I move)
-	{
-		Link::link(LnType::SIMPLE, from, to, move);
-	}
-
-	friend Linkp ko_link_2_link(Linkp_I pLink);
-	friend Linkp link_2_ko_link(Linkp_I pLink);
-	friend class Tree;
-};
-
-// long link
-class Tlink : public Link
-{
-protected:
-	Trans m_trans; // transformation from source to target
-	static vector<Tlink> m_links;
-
-public:
-	Tlink() {}
-
-	void convert(TKlinkp_I pTKlink)
-	{
-		link(pTKlink->from(), pTKlink->to(), pTKlink->move(), pTKlink->trans());
-	}
-
-	const Trans &trans() const
-	{
-		return m_trans;
-	}
-
-	void link(Long_I from, Long_I to, Move_I move, Trans_I trans)
-	{
-		Link::link(LnType::TRANS, from, to, move);
-		m_trans = trans;
+		if (::istrans(type))
+			error("not a simple link!");
+		m_type = type;
+		m_from = from;
+		m_to = to;
+		Move::operator=(move);
 	}
 
 	void link(LnType_I type, Long_I from, Long_I to, Move_I move, Trans_I trans)
 	{
-		Link::link(type, from, to, move);
+		if (!::istrans(type))
+			error("not a trans link!");
+		m_type = type;
+		m_from = from;
+		m_to = to;
 		m_trans = trans;
+		Move::operator=(move);
 	}
 
-	friend Linkp ko_link_2_link(Linkp_I pLink);
-	friend Linkp link_2_ko_link(Linkp_I pLink);
-	friend class Tree;
-};
-
-// simple ko link
-class SKlink : public Link
-{
-private:
-	Bool m_reso; // if the ko link has been resolved
-	static vector<SKlink> m_links;
-
-public:
-	SKlink(): m_reso(false) {}
-
-	// convert from a trans link
-	void convert(Slinkp_I pSlink)
+	void init()
 	{
-		link(pSlink->from(), pSlink->to(), pSlink->move());
+		m_type = LnType::INIT;
+		m_from = -1;
+		m_to = 0;
+		Move::init();
 	}
 
-	Bool resolved() const
+	void end(Long_I treeInd)
 	{
-		return m_reso;
+		m_type = LnType::INIT;
+		m_from = treeInd;
+		m_to = -1;
+		Move::end();
 	}
 
-	void resolve()
+	const Trans &trans() const
 	{
-		m_reso = true;
+		if (!::istrans(m_type))
+			error("not a trans link!");
+		return m_trans;
 	}
-
-	void link(Long_I from, Long_I to, Move_I move)
-	{
-		Link::link(LnType::KO_S, from, to, move);
-	}
-
-	friend Linkp ko_link_2_link(Linkp_I pLink);
-	friend Linkp link_2_ko_link(Linkp_I pLink);
-	friend class Tree;
-};
-
-
-// trans ko link
-class TKlink : public Tlink
-{
-private:
-	Bool m_reso; // if the ko link has been resolved
-	static vector<TKlink> m_links;
-
-public:
-	TKlink(): m_reso(false) {}
 	
-	// convert from long link
-	void convert(Tlinkp_I pTlink)
-	{
-		link(pTlink->from(), pTlink->to(), pTlink->move(), pTlink->trans());
-	}
-
 	Bool resolved() const
 	{
+		if (!::isko(m_type))
+			error("not a ko link!");
 		return m_reso;
 	}
-
+	
 	void resolve()
 	{
+		if (!::isko(m_type))
+			error("not a ko link!");
 		m_reso = true;
 	}
 
-	void link(Long_I from, Long_I to, Move_I move, Trans_I trans)
+	// only support ko/non-ko conversion for now
+	void convert(LnType_I type)
 	{
-		Tlink::link(LnType::KO_T, from, to, move, trans);
+		if (::isko(m_type)) {
+			// from ko link
+			if (!::isko(type)) {
+				// to non-ko link
+				if (m_type == LnType::KO_S) {
+					m_type = LnType::SIMPLE;
+				}
+				else { // m_type == LnType::KO_T
+					m_type = LnType::TRANS;
+				}
+			}
+		}
+		else {
+			// from non-ko link
+			if (::istrans(m_type)) {
+				// to ko link
+				if (m_type == LnType::SIMPLE) {
+					m_type = LnType::KO_S;
+				}
+				else { // m_type == LnType::TRANS
+					m_type = LnType::KO_T;
+				}
+			}
+		}
+		error("unsupported conversion");
 	}
 
-	friend Linkp ko_link_2_link(Linkp_I pLink);
-	friend Linkp link_2_ko_link(Linkp_I pLink);
-	friend class Tree;
+	void ko_link_2_link()
+	{
+		if (m_type == LnType::KO_S) {
+			m_type = LnType::SIMPLE;
+			m_reso = false;
+		}
+		else if (m_type == LnType::KO_T) {
+			m_type = LnType::TRANS;
+			m_reso = false;
+		}
+		else
+			error("not a ko link");
+	}
+
+	void link_2_ko_link()
+	{
+		if (m_type == LnType::SIMPLE) {
+			m_type = LnType::KO_S;
+			m_reso = false;
+		}
+		else if (m_type == LnType::TRANS) {
+			m_type = LnType::KO_T;
+			m_reso = false;
+		}
+		else
+			error("not a ko link");
+	}
 };
 
-inline Linkp ko_link_2_link(Linkp_I pLink)
+class Linkp
 {
-	if (pLink->type() == LnType::KO_S) {
-		Slink::m_links.emplace_back();
-		Slink::m_links.back().convert((SKlinkp)pLink);
-		return Slink::m_links.back().ptr();
-	}
-	else if (pLink->type() == LnType::KO_T) {
-		Tlink::m_links.emplace_back();
-		Tlink::m_links.back().convert((TKlinkp)pLink);
-		return Tlink::m_links.back().ptr();
-	}
-	else
-		error("not a ko link");
-}
+protected:
+	// index for Link::m_links
+	Long m_linkInd;
 
-inline Linkp link_2_ko_link(Linkp_I pLink)
+	// all links stored here
+	static vector<Link> m_links;
+
+public:
+
+	Linkp() : m_linkInd(-1) {}
+	Linkp(Long_I linkInd) : m_linkInd(linkInd) {}
+
+	// create new un-initialized link and return pointer
+	static Linkp newlink()
+	{
+		m_links.emplace_back();
+		return Linkp(m_links.size() - 1);
+	}
+
+	Link* operator->() const
+	{
+		return &m_links[m_linkInd];
+	}
+
+	friend Bool operator==(Linkp_I lhs, Linkp_I rhs);
+};
+
+
+
+inline Bool operator==(Linkp_I lhs, Linkp_I rhs)
 {
-	if (pLink->type() == LnType::SIMPLE) {
-		SKlink::m_links.emplace_back();
-		SKlink::m_links.back().convert((Slinkp)pLink);
-		return Slink::m_links.back().ptr();
-	}
-	else if (pLink->type() == LnType::TRANS) {
-		TKlink::m_links.emplace_back();
-		TKlink::m_links.back().convert((Tlinkp)pLink);
-		return TKlink::m_links.back().ptr();
-	}
-	else
-		error("not a normal link");
+	return lhs.m_linkInd == rhs.m_linkInd;
 }

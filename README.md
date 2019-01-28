@@ -120,3 +120,6 @@ Other projects such as mini-go probably requires some training.
 * KO_ONLY should probably be split into KO_GOOD, KO_BAD, KO_FAIR.
 * bug: ko links are not resolved in time, downstream to upstream ko links should be resolved when a node is solved.
 * Even if human assistance is great, the program should be debuged in auto-solve mode.
+
+* optimization: don't use any dynamic allocation except std::vector. use fixed-size array to store configs and other arrays.
+* link object does not need so many members, all info in be compressed into Link, where the value of "type" contains all other information.
