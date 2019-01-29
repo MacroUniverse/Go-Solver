@@ -32,10 +32,10 @@ public:
 	Long poolInd(Long_I orderInd) const;
 
 	// search Pool: find poolInd so that m_board[poolInd] and raw_board have the same configuration
-	// return 0, output ind: if s is found
-	// return -1: if s is not found and board is too small
-	// return  1: if s is not found and board is too large
-	// return -2: if s is not found and board is in the middle, output ind so that m_pool[ind] < s < m_pool[ind+1]
+	// return 0, output ind: if board is found
+	// return -1: if board is not found and board is too small
+	// return  1: if board is not found and board is too large
+	// return -2: if board is not found and board is in the middle, output ind so that m_pool[ind] < s < m_pool[ind+1]
 	// return -3: if m_pool.size() < 1
 	// TODO: improve implementation (stone by stone algorithm)
 	// output flip and rotation calculated by Config::calc_trans()
@@ -53,7 +53,7 @@ public:
 	// move a config to the Pool (config will be destroyed)
 	// 'who' is relative to the situation
 	// orderInd is output by search() and search_ret is returned by search()
-	void push(Board_IO config, Int_I search_ret, Long_I orderInd, Who_I who, Long_I treeInd);
+	void push(Config_IO config, Bool_I flip, Int_I search_ret, Long_I orderInd, Who_I who, Long_I treeInd);
 
 	// add a new situation to an existing configuration
 	// 'who' is relative to the config, not situation
@@ -112,12 +112,12 @@ inline void Pool::push_treeInd(Long_I treeInd, Who_I who, Bool_I flip)
 	}
 }
 
-inline void Pool::push(Board_IO board, Int_I search_ret, Long_I orderInd, Who_I who, Long_I treeInd)
+inline void Pool::push(Config_IO config, Bool_I flip, Int_I search_ret, Long_I orderInd, Who_I who, Long_I treeInd)
 {
 	// transform the board first!
-	m_boards.push_back(Config()); m_boards.back() << board.config();
+	m_boards.push_back(Config()); m_boards.back() << config;
 
-	push_treeInd(treeInd, who, board.trans().flip());
+	push_treeInd(treeInd, who, flip);
 
 	Long poolInd = m_boards.size() - 1;
 	if (search_ret == -2)

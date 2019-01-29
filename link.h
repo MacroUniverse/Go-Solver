@@ -35,6 +35,14 @@ inline Bool isko(LnType_I type)
 	return type == LnType::KO_S || type == LnType::KO_T;
 }
 
+inline LnType rm_trans(LnType_I type)
+{
+	if (type == LnType::TRANS)
+		return LnType::SIMPLE;
+	else if (type == LnType::KO_T)
+		return LnType::KO_S;
+}
+
 // short link
 class Link : public Move
 {
@@ -190,7 +198,8 @@ protected:
 public:
 
 	Linkp() : m_linkInd(-1) {}
-	Linkp(Long_I linkInd) : m_linkInd(linkInd) {}
+
+	Linkp(Long_I linkInd) : m_linkInd(linkInd) {} // allow Linkp = Long conversion
 
 	// create new un-initialized link and return pointer
 	static Linkp newlink()

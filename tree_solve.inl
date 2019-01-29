@@ -43,17 +43,25 @@ Int Tree::solve(Long_I treeInd)
 		if (i < m_nodes[treeInd].nnext()) {
 			// check existing child
 			child_treeInd = m_nodes[treeInd].next(i)->to();
-			if (is_ko_child(treeInd, i)) {
-				// existing ko child
-				move_ret = MovRet::NEW_ND;
-			}
-			else if (m_nodes[treeInd].next(i)->isko()) {
-				// existing ko link
-				move_ret = MovRet::KO_LN;
+			if (m_nodes[treeInd].next(i)->isko()) {
+				// existing ko link, check if linked to path
+				Linkp merge_link;
+				Int ret = islinked(merge_link, m_nodes[treeInd].next(i)->to(), treeInd);
+				if (ret == 2) { // on path ko link
+					move_ret = MovRet::ON_PA_KO_LN;
+				}
+				else if (ret == 3) { // off path ko link, shift it
+					m_nodes[treeInd].next(i)->ko_link_2_link();
+					merge_link->link_2_ko_link();
+					move_ret = MovRet::OFF_PA_KO_LN;
+				}
+				else {
+					error("unknown!");
+				}
 			}
 			else {
-				// existing non-ko (solved/unknown/forbidden) child
-				move_ret = MovRet::LN_NKO_ND;
+				// existing child
+				move_ret = MovRet::NEW_ND;
 			}
 		}
 		else {
@@ -88,8 +96,8 @@ Int Tree::solve(Long_I treeInd)
 			save = false;
 		} // end debug
 
-		if (move_ret == MovRet::NEW_ND || move_ret == MovRet::LN_NKO_ND
-			|| move_ret == MovRet::LN_CLN_KO_ND || move_ret == MovRet::LN_UCLN_KO_ND) {
+		if (move_ret == MovRet::NEW_ND || move_ret == MovRet::LINK
+			|| move_ret == MovRet::OFF_PA_KO_LN) {
 
 			Linkp plink = next(treeInd, -1);
 
@@ -101,20 +109,24 @@ Int Tree::solve(Long_I treeInd)
 			}
 			// end debug
 
-			if (move_ret == MovRet::LN_UCLN_KO_ND) {
-				// shift ko links to curren node
-				shift_ko_links(treeInd, -1);
+			solve_ret = -1000;
+			if (move_ret == MovRet::LINK && is_ko_node(child_treeInd)) {
+				// linked to a ko node
+				if (check_clean_ko_node(child_treeInd) >= 0) {
+					// linked to a clean ko node
+					solve_ret = 2;
+				}
+				else {
+					// linked to an unclean ko node
+					// shift ko links when necessary
+					Int a = 0; // debug break point
+				}
 			}
 			
-			if (move_ret == MovRet::LN_CLN_KO_ND) {
-				// clean ko child
-				solve_ret = 2;
-			}
-			else {
+			if (solve_ret == -1000)
 				//###########################################################
 				solve_ret = solve(child_treeInd);
 				//###########################################################
-			}
 
 			if (save) { // debug
 				writeSGF("test.sgf");
@@ -183,7 +195,7 @@ Int Tree::solve(Long_I treeInd)
 			else
 				error("unhandled case!");
 		}
-		else if (move_ret == MovRet::KO_LN || move_ret == MovRet::DB_PAS_KO_LN) {
+		else if (move_ret == MovRet::ON_PA_KO_LN || move_ret == MovRet::DB_PAS_KO_LN) {
 			Long child_treeInd = next(treeInd, -1)->to();
 			has_ko_link = true;
 			continue;

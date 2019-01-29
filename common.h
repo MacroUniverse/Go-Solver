@@ -43,14 +43,14 @@ typedef Move &Move_O, &Move_IO;
 // consequences of a move
 enum class MovRet : Char
 {
-	NEW_NODE, // new node created
-	NEW_ND, // new node created
-	LN_CLN_KO_ND, // linked to a clean ko node
-	LN_UCLN_KO_ND, // linked to an unclean ko node
-	LN_NKO_ND, // linked to a non-ko node (good/bad/fair/unkown/forbidden)
+	NEW_ND, // NEW_ND_NEW_CF or NEW_ND_OLD_CF
+	NEW_ND_NEW_CF, // new node created, with new config
+	NEW_ND_OLD_CF, // new node created, with old config
+	LINK, // non-ko link
 	DB_PAS_END, // double pass caused game to end, two nodes are solved
 	DB_PAS_KO_LN, // double pass not allowed, ko link created
-	KO_LN, // ko link created
+	ON_PA_KO_LN, // on path ko link created
+	OFF_PA_KO_LN, // off path ko link shifted, non-ko link created
 	ILLEGAL, // illegal move
 	ALL_EXIST // all children exist
 };
