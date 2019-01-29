@@ -81,6 +81,11 @@ If neither ko (打劫) nor upward fork is considered, the above algorithm for so
 * If any other child of one node is good, or if the best children of both nodes are fair, then the two nodes can be solved and scored.
 * If the best children of both nodes are both bad or one bad one fair, neither node will have a solution (thus, not all situations have a solution!). Who enter the ko node first will have a worse result comparing to entering second.
 
+### Flipped Ko
+* A flipped Ko is a same situation in the upstream of a node, with the colors of all stones flipped.
+* A flipped ko is when the player creating a same situation for himself.
+* For now I'm assuming all flipped ko are trivial and checking for non-trivial case.
+
 ### General Ko
 * A ko (a ko loop with 2 or more nodes) is called a trivial ko if all it's node are solvable. Otherwise, it is called a non-trivial ko.
 * There are three kinds of child: solvable child, ko link and ko child (a child that is a ko node). A forbidden child is not a child.
@@ -94,11 +99,7 @@ If neither ko (打劫) nor upward fork is considered, the above algorithm for so
 * A ko is resolved when it's target is solved or marked as a ko node.
 * A ko node with all downstream ko links resolved is a clean ko node.
 * A clean ko node is eqivalent to a solvable child when solving it's parent.
-
-### Flipped Ko
-* A flipped Ko is a same situation in the upstream of a node, with the colors of all stones flipped.
-* A flipped ko is when the player creating a same situation for himself.
-* For now I'm assuming all flipped ko are trivial and checking for non-trivial case.
+* When upward fork exists, a ko link might only link to one upward branch, the solver must keep track of the current branch from the beginning of the game to decide whether this ko link points to a node in the current branch. If not, shift the ko link until it is.
 
 ### Linking to an Existing Ko Node
 * shift [resolved downstream ko links to up stream] along ko loop until it targets the ko node being linked, than solve that ko node with the same algorithm as solving any node (except some downstream nodes already exist).

@@ -52,14 +52,14 @@ typedef Llong Long;
 #else
 typedef Int Long;
 #endif
-typedef const Long &Long_I;
+typedef const Long Long_I;
 typedef Long;
 typedef Long &Long_O, &Long_IO;
 
-typedef const char &Char_I; // 8 bit integer
+typedef const char Char_I; // 8 bit integer
 typedef char Char;
 typedef char &Char_O, &Char_IO;
-typedef const unsigned char &Uchar_I;
+typedef const unsigned char Uchar_I;
 typedef unsigned char Uchar;
 typedef unsigned char &Uchar_O, &Uchar_IO;
 
@@ -75,7 +75,7 @@ typedef const std::complex<double> &Comp_I;
 typedef std::complex<double> Comp;
 typedef std::complex<double> &Comp_O, &Comp_IO;
 
-typedef const bool &Bool_I;
+typedef const bool Bool_I;
 typedef bool Bool;
 typedef bool &Bool_O, &Bool_IO;
 

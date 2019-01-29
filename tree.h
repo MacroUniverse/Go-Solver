@@ -71,10 +71,11 @@ public:
 
 	inline Bool isend(Long_I treeInd) const; // if a node is an end node
 
-	// create simple ko link
+	// create simple (ko) link
 	void link(LnType_I type, Long_I treeInd_from, Long_I treeInd_to, Move_I move);
 
-	// create trans ko link
+	// create trans (ko) link
+	// will check if trans is identity and create simple (ko) link if possible
 	void link(LnType_I type, Long_I treeInd_from, Long_I treeInd_to, Move_I move, Trans_I trans);
 
 	// unlink two nodes
@@ -86,9 +87,16 @@ public:
 	// check if node(treeInd_from) is an upstream node of node(treeInd_to)
 	// ko links are ignored
 	// return 0 if not linked
-	// return 1 if linked (treeInd1 != treeInd2)
-	// return 2 if treeInd1 == treeInd2
-	inline Int islinked(Long_I treeInd1, Long_I treeInd2) const;
+	// return 1 if treeInd_from == treeInd_to
+	// otherwise:
+	// return 2 if linked through current branch
+	// return 3 if linked through non-current branch, output the merge node of two branches
+	inline Int islinked(Long_O treeInd_merge, Long_I treeInd_from, Long_I treeInd_to);
+
+	// internal recursive function called by islinked()
+	// returns and outputs are the same as islinked0, except
+	// return 4 if linked through non-current branch, merge node not known yet
+	inline Int islinked0(Long_O treeInd_merge, Long_I treeInd_from, Long_I treeInd_to, Bool_I in_curent_branch);
 	
 	// ======== ko related methods =======================
 
@@ -381,12 +389,7 @@ inline MovRet Tree::pass(Long_O child_treeInd, Long_I treeInd)
 				// game not ended, build a ko link
 				child_treeInd = last(treeInd, i)->from();
 				Trans trans = lastNode(treeInd, i).trans() - node.trans();
-				if (is_one(trans)) {
-					link(LnType::KO_S, treeInd, child_treeInd, Move(Act::PASS));
-				}
-				else {
-					link(LnType::KO_T, treeInd, child_treeInd, Move(Act::PASS), trans);
-				}
+				link(LnType::KO_T, treeInd, child_treeInd, Move(Act::PASS), trans);
 				return MovRet::DB_PAS_KO_LN;
 			}
 			break;
@@ -411,12 +414,7 @@ inline MovRet Tree::pass(Long_O child_treeInd, Long_I treeInd)
 		// situation exists, not a ko
 		child_treeInd = treeInd_found;
 		Trans trans = m_nodes[child_treeInd].trans() - node.trans();
-		if (is_one(trans)) {
-			link(LnType::SIMPLE, treeInd, child_treeInd, Move(Act::PASS));
-		}
-		else {
-			link(LnType::TRANS, treeInd, child_treeInd, Move(Act::PASS), trans);
-		}
+		link(LnType::TRANS, treeInd, child_treeInd, Move(Act::PASS), trans);
 			
 		if (is_ko_node(child_treeInd)) {
 			// linked to a ko node
@@ -438,19 +436,15 @@ inline MovRet Tree::pass(Long_O child_treeInd, Long_I treeInd)
 		// situation exists, is a ko
 		child_treeInd = treeInd_found;
 		Trans trans = m_nodes[child_treeInd].trans() - node.trans();
-		if (is_one(trans)) {
-			link(LnType::KO_S, treeInd, child_treeInd, Move(Act::PASS));
-		}
-		else {
-			link(LnType::KO_T, treeInd, child_treeInd, Move(Act::PASS), trans);
-		}
+		link(LnType::KO_T, treeInd, child_treeInd, Move(Act::PASS), trans);
 		return MovRet::KO_LN;
 	}
 	else if (ret == 0) { // configuration does not exist
 		error("impossible case, configuration must exist!");
 	}
-	else
+	else {
 		error("unhancled case!");
+	}
 }
 
 inline Int Tree::check(Char_I x, Char_I y, Long_I treeInd)
@@ -489,70 +483,63 @@ inline MovRet Tree::place(Long_O child_treeInd, Char_I x, Char_I y, Long_I treeI
 
 	// check Ko
 	Int search_ret;
-	Long orderInd;
-	Long treeInd_found;
+	Long orderInd, treeInd_found;
+
 	ret = check_ko(search_ret, treeInd_found, orderInd, treeInd, board.config(), board.trans().flip());
-	if (ret < 0) { // board already exists
+	
+	if (ret == -1) {
+		// situation exists, not a ko
 		child_treeInd = treeInd_found;
-		if (ret == -1) {
-			// not a ko
-			Trans trans = m_nodes[treeInd_found].trans() - board.trans();
-			if (is_one(trans)) {
-				link(LnType::SIMPLE, treeInd, treeInd_found, Move(x, y));
+		Trans trans = m_nodes[treeInd_found].trans() - board.trans();
+		link(LnType::TRANS, treeInd, treeInd_found, Move(x, y), trans);
+		if (is_ko_node(treeInd_found)) {
+			// linked to a ko node
+			if (check_clean_ko_node(treeInd_found) >= 0) {
+				// linked to a clean ko node
+				return MovRet::LN_CLN_KO_ND;
 			}
 			else {
-				link(LnType::TRANS, treeInd, treeInd_found, Move(x, y), trans);
-			}
-			if (is_ko_node(treeInd_found)) {
-				// linked to a ko node
-				if (check_clean_ko_node(treeInd_found) >= 0) {
-					// linked to a clean ko node
-					return MovRet::LN_CLN_KO_ND;
-				}
-				else {
-					// linked to an unclean ko node
-					return MovRet::LN_UCLN_KO_ND;
-				}
-			}
-			else {
-				// linked to a non-ko (solved/forbidden/unkown) node
-				return MovRet::LN_NKO_ND;
+				// linked to an unclean ko node
+				return MovRet::LN_UCLN_KO_ND;
 			}
 		}
-		else if (ret == -2) {
-			// is a ko
-			Trans trans = m_nodes[treeInd_found].trans() - board.trans();
-			if (is_one(trans)) {
-				link(LnType::KO_S, treeInd, treeInd_found, Move(x, y));
-			}
-			else {
-				link(LnType::KO_T, treeInd, treeInd_found, Move(x, y), trans);
-			}
-			return MovRet::KO_LN;
+		else {
+			// linked to a non-ko (solved/forbidden/unkown) node
+			return MovRet::LN_NKO_ND;
 		}
 	}
-
-	// new situation
-	m_nodes.emplace_back(); // add Node to tree
-	child_treeInd = max_treeInd();
-
-	if (ret == -3) {
-		// configuration exists
-		Who next_who_config;
-		if (board.trans().flip())
-			next_who_config = ::next(next_who);
-		else
-			next_who_config = next_who;
-		m_pool.link(orderInd, next_who_config, child_treeInd);
-		m_nodes.back().set(next_who, m_pool.poolInd(orderInd), board.trans());
+	else if (ret == -2) {
+		// situation exists, is a ko
+		child_treeInd = treeInd_found;
+		Trans trans = m_nodes[treeInd_found].trans() - board.trans();
+		link(LnType::KO_T, treeInd, treeInd_found, Move(x, y), trans);
+		return MovRet::KO_LN;
 	}
-	else { // configuration does not exist
-		m_pool.push(board, search_ret, orderInd, next_who, child_treeInd);
-		m_nodes.back().set(next_who, m_pool.size() - 1, board.trans());
+	else {
+		// new situation
+		m_nodes.emplace_back();
+		child_treeInd = max_treeInd();
+		if (ret == -3) {
+			// configuration exists
+			Who next_who_config;
+			if (board.trans().flip())
+				next_who_config = ::next(next_who);
+			else
+				next_who_config = next_who;
+			m_pool.link(orderInd, next_who_config, child_treeInd);
+			m_nodes.back().set(next_who, m_pool.poolInd(orderInd), board.trans());
+		}
+		else if (ret == 0) {
+			// new configuration
+			m_pool.push(board, search_ret, orderInd, next_who, child_treeInd);
+			m_nodes.back().set(next_who, m_pool.size() - 1, board.trans());
+		}
+		else {
+			error("unknown!");
+		}
+		link(LnType::SIMPLE, treeInd, child_treeInd, Move(x, y));
+		return MovRet::NEW_ND;
 	}
-
-	link(LnType::SIMPLE, treeInd, child_treeInd, Move(x, y));
-	return MovRet::NEW_ND;
 }
 
 inline void Tree::link(LnType_I type, Long_I treeInd_from, Long_I treeInd_to, Move_I move)
@@ -567,6 +554,13 @@ inline void Tree::link(LnType_I type, Long_I treeInd_from, Long_I treeInd_to, Mo
 
 inline void Tree::link(LnType_I type, Long_I treeInd_from, Long_I treeInd_to, Move_I move, Trans_I trans)
 {
+	if (is_one(trans)) {
+		// create simple (ko) link instead
+		link(rm_trans(type), treeInd_from, treeInd_to, move);
+		return;
+	}
+
+	// created trans (ko) link
 	Linkp plink = Linkp::newlink();
 	plink->link(type, treeInd_from, treeInd_to, move, trans);
 	m_nodes[treeInd_from].push_next(plink);
@@ -593,37 +587,141 @@ inline void Tree::relink(Linkp_I plink)
 	node_to.push_last(plink);
 }
 
-// this is a recursive function
-inline Int Tree::islinked(Long_I treeInd_from, Long_I treeInd_to) const
+inline Int Tree::islinked(Long_O treeInd_merge, Long_I treeInd_from, Long_I treeInd_to)
 {
+	Int ret;
 	Long i, treeInd;
+	Bool in_current_branch;
 	if (treeInd_from == treeInd_to) {
-		return 2;
+		return 1;
 	}
+	treeInd_merge = -1; // debug
+	vector<Long> clean; // all searched off path node to be unmarked
+	ret = islinked0(clean, treeInd_merge, treeInd_from, treeInd_to, true);
+	
+	// clean marks
+	for (Int j = 0; j < clean.size(); ++j) {
+		m_nodes[clean[j]].mark() = 0;
+	}
+
+	// debug
+	if (ret == 3) {
+		if (treeInd_merge < 0) {
+			error("unknown!");
+		}
+	}
+	else if (ret == 4) {
+		error("unknown!");
+	}
+	else {
+		return ret;
+	}
+}
+
+// this is a recursive function
+inline Int Tree::islinked0(vector<Long> &clean, Long_O treeInd_merge, Long_I treeInd_from, Long_I treeInd_to, Bool_I in_current_branch)
+{
+	Int ret;
+	Long i, treeInd;
+
 	treeInd = treeInd_to;
+
 	for (i = 0; i < 10000; ++i) {
-		if (treeInd == treeInd_from)
-			return 1; // found treeInd_from
-		if (m_nodes[treeInd].nlast() > 1)
-			break; // multiple upward fork
-		if (treeInd == 0)
-			return 0; // reached top of tree
-		if (last(treeInd, 0)->isko())
-			error("lonely parent!");
-		treeInd = last(treeInd, 0)->from(); // single line, go up
-	}
-	for (i = 0; i < m_nodes[treeInd].nlast(); ++i) {
-		if (last(treeInd, i)->isko()) {
-			continue;
+		if (treeInd == treeInd_from) {
+			// found it!
+			if (in_current_branch)
+				// linked through current branch
+				return 2;
+			else {
+				// not through current branch
+				// merge node not known
+				return 4;
+			}
 		}
 		else {
-			Int ret = islinked(treeInd_from, last(treeInd, i)->from());
-			if (ret == 1 || ret == 2) {
-				return 1;
+			Char &mark = m_nodes[treeInd].mark();
+			if (!in_current_branch) {
+				// mark searched
+				mark = -1;
+				clean.push_back(treeInd);
+			}
+			if (m_nodes[treeInd].nlast() > 1) {
+				// multiple upward fork
+				break;
+			}
+			else if (treeInd == 0 || mark == -1 || mark == 1 && !in_current_branch) {
+				// 0: reached top of tree
+				// -1: reached searched path
+				// else: path already searched
+				return 0;
+			}
+			else {
+				// single line, go up
+				if (last(treeInd, 0)->isko()) // debug
+					error("lonely parent!");
+				treeInd = last(treeInd, 0)->from();
 			}
 		}
 	}
-	return false;
+
+	// at a node with upward fork
+	if (in_current_branch) {
+		// in path, follow path first
+		for (i = m_nodes[treeInd].nlast() - 1; i >= 0; --i) {
+			if (lastNode(treeInd, i).mark() == 1) {
+				ret = islinked0(treeInd_merge, treeInd_from, last(treeInd, i)->from(), true);
+				if (ret == 0) {
+					// not found
+					break;
+				}
+				else if (ret == 2) {
+					// linked through current branch
+					return 2;
+				}
+				// linked through non-current branch
+				else if (ret == 3) {
+					// merge node found
+					return 3;
+				}
+				else if (ret == 4) {
+					// merge node not found, but now appears
+					treeInd_merge = last(treeInd, i)->from();
+					return 3;
+				}
+				else {
+					error("unknown!");
+				}
+			}
+		}
+	}
+
+	// not found on current branch
+	for (i = m_nodes[treeInd].nlast() - 1; i >= 0; --i) {
+		if (last(treeInd, i)->isko()) {
+			continue; // don't follow ko links
+		}
+		else if (lastNode(treeInd, i).mark() == 1) {
+			continue; // don't follow current branch (already searched)
+		}
+		else {
+			ret = islinked0(treeInd_merge, treeInd_from, last(treeInd, i)->from(), false);
+			if (ret == 0) {
+				// not found
+				continue;
+			}
+			// linked through non-current branch
+			else if (ret == 4) {
+				// merge node not found
+				return 4;
+			}
+			else {
+				error("unknown");
+			}
+		}
+	}
+
+	// not linked
+	return 0;
 }
 
 inline Int Tree::check_ko(Int_O search_ret, Long_O treeInd_match, Long_O orderInd,

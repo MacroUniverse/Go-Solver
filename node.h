@@ -18,8 +18,14 @@ private:
 	Sol m_sol; // Sol::GOOD/Sol::BAD/Sol::FAIR
 	Int m_score2; // an over-estimation of final score (two gods playing), -1 means unclear
 
+	// mark for keeping track of the path and searching
+	// default value: 0
+	// on path node: 1
+	// searched off path node: -1
+	Char m_mark;
+
 public:
-	Node() : m_sol(Sol::UNKNOWN), m_score2(-1) {}
+	Node() : m_sol(Sol::UNKNOWN), m_score2(-1), m_mark(0) {}
 
 	// properties
 
@@ -85,7 +91,15 @@ public:
 	// will not deallocate link!
 	void delete_next(Int_I forkInd);
 
-	~Node() {}
+	Char mark() const
+	{
+		return m_mark;
+	}
+
+	Char &mark()
+	{
+		return m_mark;
+	}
 };
 
 inline Who Node::who() const
