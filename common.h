@@ -184,7 +184,7 @@ inline Char board_Ny(Char_I Ny = -1)
 	return Ny0;
 }
 
-// board size Ny, may only set once
+// set or get 2 times komi, may only set once
 // should only be integer or half integers
 inline Int komi2(Int_I k2 = -1132019)
 {
