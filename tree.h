@@ -857,7 +857,8 @@ inline void Tree::writeSGF0(VecBool &check, ofstream &fout, Long_I treeInd_from,
 // write one node to SGF file
 inline void Tree::writeSGF01(ofstream &fout, Long_I treeInd_from, Int_I forkInd, Trans_I trans) const
 {
-	Char BW, x, y; // letter B or letter W
+	Char BW; // 'B' or 'W'
+	Char x, y; // coordinates
 	Who who;
 	Linkp plink = next(treeInd_from, forkInd);
 	Long treeInd = plink->to();
