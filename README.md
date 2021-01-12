@@ -104,6 +104,12 @@ If neither ko (打劫) nor upward fork is considered, the above algorithm for so
 ### Linking to an Existing Ko Node
 * shift [resolved downstream ko links to up stream] along ko loop until it targets the ko node being linked, than solve that ko node with the same algorithm as solving any node (except some downstream nodes already exist).
 
+### SGF file output
+* use Sabaki to show the output sgf file. View -> show game tree; View -> show comments
+* comments: `[123]9` means the unique node number is 123, and current player will at best occupy 9 points at the end
+* Node colors: green (black wins, marked `[TE]` in file); blue (white wins, marked `[IT]` in file)
+* a square node means pass
+
 ## GNU go
 GNU go can play 5x5 to 19x19 boards. So it might be used to guess the best child for these boards. Another advantage is it might be written in c.
 
