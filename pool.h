@@ -115,7 +115,7 @@ inline void Pool::push_treeInd(Long_I treeInd, Who_I who, Bool_I flip)
 inline void Pool::push(Config_IO config, Bool_I flip, Int_I search_ret, Long_I orderInd, Who_I who, Long_I treeInd)
 {
 	// transform the board first!
-	m_boards.push_back(Config()); m_boards.back() << config;
+	m_boards.emplace_back();  m_boards.back() << config;
 
 	push_treeInd(treeInd, who, flip);
 

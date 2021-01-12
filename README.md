@@ -1,3 +1,5 @@
+This project is discontinued, the last working version is the last commits on Jan 28, 2019
+
 # Go-Solver
 Solving the game of Go by analyzing the game tree.
 
