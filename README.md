@@ -10,7 +10,7 @@ The fair komi is currently only known for very small boards by human, the larges
 
 The game tree of Go reveals all possibilities of a game. The tree is composed of connected nodes, each node represents a status of the board. The node at the top of the game tree represents an empty board, and a node at the bottom of the tree represents configuration of the board when the game ends. A node may connect to multiple lower nodes (child nodes), but it can only connect to one parent node (the node that leads to it). Sibling nodes are the nodes that share the same parents.
 
-Let's assume that two gods play the game starting from a given node in the tree with a given komi. According to game theory, if this is fair, the game will end with a draw, if this is unfair, the advantageous side is guaranteed to win.
+Let's assume that two gods play the game starting from a given node in the tree with a given komi. According to game theory, if the starting node is fair, the game will end with a draw, if this is unfair, the advantageous side is guaranteed to win.
 
 The current objective of this project is to decide, for a given node and given komi, whether it is fair, and which side is advantageous (i.e. solving that node). Apparently, the closer the node is to the bottom, the easier it can be solved.
 
@@ -20,14 +20,13 @@ The solution of a given node (good/bad/fair for the one who played this node) is
 Thus the most efficient algorithm will depend on how well another program can play Go (i.e. how well it can guess the best child, second best child etc.). For a given node, we should always solve the (guessed) best children first, then the (guessed) second best, etc, keeping track of the best child in the meanwhile to decide when to stop. This is more efficient than randomly choosing a child if the given node is bad, but is equally efficient if this node is good or fair (since we have to solve all children anyway). Since we don't know, we should always solve the (guessed) best child first.
 
 ## Computer Player Rules
-Here is some rules for randomly evaluating children of a node. When another go playing program is available.
+Here is some rules for randomly evaluating children of a node, when another go playing program is not available.
 * A dumb move is a bad move in all situation, and should never be played by the computer. Currently dumb moves include dumb eye filling and dumb big eye filling.
 * An eye is a single empty point on the board surrounded by the same color of stones. 4 stones are needed for an eye not on boarder, 3 for edge, 2 for corner.
-* A Dumb eye filling is placing a stone in a player's own eye when it will not be destroyed by the opponent immediately. If this is allowed when enumerating child nodes, the computer will frequently commit suicide.
+* A dumb eye filling is placing a stone in a player's own eye when it will not be destroyed by the opponent immediately. If this is allowed when enumerating child nodes, the computer will frequently commit suicide.
 * A big eye is composed of two connected empty points on the board, surrounded by connected stones. It's not possible to destroy a big eye in one step.
-* A Dumb big eye filling is placing a stone in a player's own big eye. At the end of the game, there will be no big eye left because the opponent will eventually try to destroy it.
+* A dumb big eye filling is placing a stone in a player's own big eye. At the end of the game, there will be no big eye left because the opponent will eventually try to destroy it.
 * Only try passing when there is no other options.
-
 * If double passing is not allowed, it is considered a ko.
 
 ## Equivalent Board Configurations
